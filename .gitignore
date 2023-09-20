@@ -30,3 +30,7 @@
 *.exe
 *.out
 *.app
+
+# CLion Temporary Files
+.idea/*
+cmake-*/*
