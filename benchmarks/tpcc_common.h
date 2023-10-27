@@ -13,6 +13,6 @@ namespace epic::tpcc {
 constexpr size_t kMaxWarehouses = 64;
 constexpr uint32_t kMaxCustomers = 3000;
 
-}
+} // namespace epic::tpcc
 
 #endif // TPCC_COMMON_H

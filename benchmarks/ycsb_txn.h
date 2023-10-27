@@ -8,10 +8,8 @@
 namespace epic {
 
 class YcsbTxn
-{
+{};
 
-};
-
-}
+} // namespace epic
 
 #endif // YCSB_TXN_H

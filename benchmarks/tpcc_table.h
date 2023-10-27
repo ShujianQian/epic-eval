@@ -26,14 +26,20 @@ union WarehouseKey
         baseType w_id : ceilLog2(2 * kMaxWarehouses);
     } key;
     baseType base_key;
+    explicit WarehouseKey(baseType w_id)
+    {
+        base_key = 0;
+        key.w_id = w_id;
+    }
 };
 
 struct WarehouseValue
 {
     /* TODO: implement WarehouseValue */
+    uint32_t placeholder;
 };
 
-struct DistrictKey
+union DistrictKey
 {
     using baseType = ChooseBitfieldBaseType<20, 2 * kMaxWarehouses>::type;
     struct
@@ -42,9 +48,21 @@ struct DistrictKey
         baseType d_w_id : ceilLog2(2 * kMaxWarehouses);
     } key;
     baseType base_key;
+    DistrictKey(baseType d_id, baseType d_w_id)
+    {
+        base_key = 0;
+        key.d_id = d_id;
+        key.d_w_id = d_w_id;
+    }
 };
 
-struct CustomerKey
+struct DistrictValue
+{
+    /* TODO: implement DistrictValue */
+    uint32_t placeholder;
+};
+
+union CustomerKey
 {
     using baseType = ChooseBitfieldBaseType<96'000, 20, 2 * kMaxWarehouses>::type;
     struct
@@ -54,9 +72,22 @@ struct CustomerKey
         baseType c_w_id : ceilLog2(2 * kMaxWarehouses);
     } key;
     baseType base_key;
+    CustomerKey(baseType c_id, baseType c_d_id, baseType c_w_id)
+    {
+        base_key = 0;
+        key.c_id = c_id;
+        key.c_d_id = c_d_id;
+        key.c_w_id = c_w_id;
+    }
 };
 
-struct HistoryKey
+struct CustomerValue
+{
+    /* TODO: implement CustomerValue */
+    uint32_t placeholder;
+};
+
+union HistoryKey
 {
     using baseType = ChooseBitfieldBaseType<96'000, 20, 2 * kMaxWarehouses, 20, 2 * kMaxWarehouses, 1'000'000>::type;
     struct
@@ -69,9 +100,25 @@ struct HistoryKey
         baseType h_date : ceilLog2(1'000'000);
     } key;
     baseType base_key;
+    HistoryKey(baseType h_c_id, baseType h_c_d_id, baseType h_c_w_id, baseType h_d_id, baseType h_w_id, baseType h_date)
+    {
+        base_key = 0;
+        key.h_c_id = h_c_id;
+        key.h_c_d_id = h_c_d_id;
+        key.h_c_w_id = h_c_w_id;
+        key.h_d_id = h_d_id;
+        key.h_w_id = h_w_id;
+        key.h_date = h_date;
+    }
 };
 
-struct NewOrderKey
+struct HistoryValue
+{
+    /* TODO: implement HistoryValue */
+    uint32_t placeholder;
+};
+
+union NewOrderKey
 {
     using baseType = ChooseBitfieldBaseType<10'000'000, 20, 2 * kMaxWarehouses>::type;
     struct
@@ -81,9 +128,22 @@ struct NewOrderKey
         baseType no_w_id : ceilLog2(2 * kMaxWarehouses);
     };
     baseType base_key;
+    NewOrderKey(baseType no_o_id, baseType no_d_id, baseType no_w_id)
+    {
+        base_key = 0;
+        this->no_o_id = no_o_id;
+        this->no_d_id = no_d_id;
+        this->no_w_id = no_w_id;
+    }
 };
 
-struct OrderKey
+struct NewOrderValue
+{
+    /* TODO: implement NewOrderValue */
+    uint32_t placeholder;
+};
+
+union OrderKey
 {
     using baseType = typename ChooseBitfieldBaseType<10'000'000, 20, 2 * kMaxWarehouses>::type;
     struct
@@ -93,14 +153,23 @@ struct OrderKey
         baseType o_w_id : ceilLog2(2 * kMaxWarehouses);
     };
     baseType base_key;
+    OrderKey(baseType o_id, baseType o_d_id, baseType o_w_id)
+    {
+        base_key = 0;
+        this->o_id = o_id;
+        this->o_d_id = o_d_id;
+        this->o_w_id = o_w_id;
+    }
 };
 
 struct OrderValue
 {
+    /* TODO: implement OrderValue */
     uint32_t o_c_id;
+    uint32_t placeholder;
 };
 
-struct OrderLineKey
+union OrderLineKey
 {
     using baseType = ChooseBitfieldBaseType<10'000'000, 20, 2 * kMaxWarehouses, 15>::type;
     struct
@@ -111,9 +180,23 @@ struct OrderLineKey
         baseType ol_number : ceilLog2(15);
     } key;
     baseType base_key;
+    OrderLineKey(baseType ol_o_id, baseType ol_d_id, baseType ol_w_id, baseType ol_number)
+    {
+        base_key = 0;
+        key.ol_o_id = ol_o_id;
+        key.ol_d_id = ol_d_id;
+        key.ol_w_id = ol_w_id;
+        key.ol_number = ol_number;
+    }
 };
 
-struct ItemKey
+struct OrderLineValue
+{
+    /* TODO: implement OrderLineValue */
+    uint32_t placeholder;
+};
+
+union ItemKey
 {
     using baseType = ChooseBitfieldBaseType<200'000>::type;
     struct
@@ -121,9 +204,20 @@ struct ItemKey
         baseType i_id : ceilLog2(200'000);
     } key;
     baseType base_key;
+    explicit ItemKey(baseType i_id)
+    {
+        base_key = 0;
+        key.i_id = i_id;
+    }
 };
 
-struct StockKey
+struct ItemValue
+{
+    /* TODO: implement ItemValue */
+    uint32_t placeholder;
+};
+
+union StockKey
 {
     using baseType = ChooseBitfieldBaseType<200'000, 2 * kMaxWarehouses>::type;
     struct
@@ -132,6 +226,18 @@ struct StockKey
         baseType s_w_id : ceilLog2(2 * kMaxWarehouses);
     } key;
     baseType base_key;
+    StockKey(baseType s_i_id, baseType s_w_id)
+    {
+        base_key = 0;
+        key.s_i_id = s_i_id;
+        key.s_w_id = s_w_id;
+    }
+};
+
+struct StockValue
+{
+    /* TODO: implement StockValue */
+    uint32_t placeholder;
 };
 
 class TpccIndex

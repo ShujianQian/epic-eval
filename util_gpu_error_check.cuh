@@ -2,12 +2,15 @@
 // Created by Shujian Qian on 2023-08-13.
 //
 
-#ifndef UTIL_GPU_ERROR_CHECK_H
-#define UTIL_GPU_ERROR_CHECK_H
+#ifndef UTIL_GPU_ERROR_CHECK_CUH
+#define UTIL_GPU_ERROR_CHECK_CUH
 
 #include <cstdio>
 
-#define gpu_err_check(ans) gpu_err_check_impl((ans), __FILE__, __LINE__)
+#ifdef EPIC_CUDA_AVAILABLE
+#    ifdef __CUDACC__
+
+#        define gpu_err_check(ans) gpu_err_check_impl((ans), __FILE__, __LINE__)
 inline void gpu_err_check_impl(cudaError_t code, const char *file, int line, bool abort = true)
 {
     if (code != cudaSuccess)
@@ -21,4 +24,7 @@ inline void gpu_err_check_impl(cudaError_t code, const char *file, int line, boo
     }
 }
 
-#endif // UTIL_GPU_ERROR_CHECK_H
+#    endif // __CUDACC__
+#endif     // EPIC_CUDA_AVAILABLE
+
+#endif // UTIL_GPU_ERROR_CHECK_CUH

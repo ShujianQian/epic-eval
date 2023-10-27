@@ -7,10 +7,9 @@
 
 namespace epic {
 
-class Table {
+class Table
+{};
 
-};
-
-}
+} // namespace epic
 
 #endif // TABLE_H

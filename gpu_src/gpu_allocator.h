@@ -2,10 +2,12 @@
 // Created by Shujian Qian on 2023-08-09.
 //
 
-#ifndef GPU_ALLOCATOR_CUH
-#define GPU_ALLOCATOR_CUH
+#ifndef GPU_ALLOCATOR_H
+#define GPU_ALLOCATOR_H
 
 #include "../allocator.h"
+
+#ifdef EPIC_CUDA_AVAILABLE
 
 namespace epic {
 class GpuAllocator : public Allocator
@@ -16,4 +18,6 @@ public:
 };
 } // namespace epic
 
-#endif // GPU_ALLOCATOR_CUH
+#endif // EPIC_CUDA_AVAILABLE
+
+#endif // GPU_ALLOCATOR_H

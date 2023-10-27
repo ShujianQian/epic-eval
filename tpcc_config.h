@@ -8,6 +8,8 @@
 #include <cstdint>
 #include <cstdlib>
 
+#include "util_device_type.h"
+
 namespace epic::tpcc {
 
 struct TpccTxnMix
@@ -30,6 +32,9 @@ struct TpccConfig
     size_t num_warehouses = 8;
     size_t order_table_size = 1'000'000;
     size_t orderline_table_size = 10'000'000;
+    DeviceType index_device = DeviceType::CPU;
+    DeviceType initialize_device = DeviceType::GPU;
+    DeviceType execution_device = DeviceType::GPU;
 };
 
 } // namespace epic::tpcc

@@ -2,9 +2,9 @@
 // Created by Shujian Qian on 2023-08-09.
 //
 
-#include "gpu_allocator.cuh"
+#include "gpu_allocator.h"
 
-#include "util_gpu_error_check.h"
+#include "util_gpu_error_check.cuh"
 
 namespace epic {
 void *GpuAllocator::Allocate(size_t size)

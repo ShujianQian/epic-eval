@@ -37,6 +37,18 @@ public:
         logger->info(fmt, std::forward<Args>(args)...);
     }
 
+    template<typename... Args>
+    void Warn(std::string_view fmt, Args... args)
+    {
+        logger->warn(fmt, args...);
+    }
+
+    template<typename... Args>
+    void Error(std::string_view fmt, Args... args)
+    {
+        logger->error(fmt, args...);
+    }
+
     std::shared_ptr<spdlog::logger> logger = nullptr;
 
 private:

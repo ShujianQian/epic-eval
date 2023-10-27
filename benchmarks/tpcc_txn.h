@@ -65,6 +65,7 @@ struct NewOrderTxnParams
     {
         uint32_t item_id;  /* i_id */
         uint32_t stock_id; /* w_id, i_id */
+        uint32_t order_line_id;
         uint32_t order_quantities;
     };
     uint32_t warehouse_id; /* w_id */
@@ -97,7 +98,6 @@ struct NewOrderExecPlan
     uint32_t customer_loc;
     uint32_t new_order_loc;
     uint32_t order_loc;
-    uint32_t num_items;
     ItemPlan item_plans[TxnType::kMaxItems];
 };
 
@@ -133,6 +133,15 @@ union TpccTxn
     StockLevelTxn stock_level_txn;
 };
 
+union TpccTxnParam
+{
+    NewOrderTxnParams<FixedSizeTxn> new_order_txn;
+};
+
+union TpccExecPlan
+{
+    NewOrderExecPlan<FixedSizeTxn> new_order_txn;
+};
 
 /* TODO: how to implement piece exection on GPU? */
 void runTransaction(BaseTxn *txn);

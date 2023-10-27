@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <list>
 #include <stack>
+#include <queue>
 
 #include "unordered_index.h"
 
@@ -23,7 +24,7 @@ template<typename KeyType, typename RowIdType = uint32_t>
 class StdHashtableIndex : public UnorderedIndex<KeyType, RowIdType>
 {
 private:
-    std::stack<RowIdType> free_list;
+    std::queue<RowIdType> free_list;
     struct Element
     {
         RowIdType row_id;
@@ -33,7 +34,7 @@ private:
 
 public:
     explicit StdHashtableIndex(RowIdType max_row_id)
-    : map(max_row_id)
+        : map(max_row_id)
     {
         for (RowIdType i = 0; i < max_row_id; i++)
         {
@@ -43,7 +44,7 @@ public:
 
     RowIdType findOrInsertRow(KeyType key, uint32_t epoch_id) override
     {
-        Element element {free_list.top(), epoch_id};
+        Element element{free_list.front(), epoch_id};
 
         auto ret = map.emplace(std::make_pair(key.base_key, element));
         if (ret.second)

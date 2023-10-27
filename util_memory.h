@@ -17,6 +17,6 @@ struct FreeDelete
     }
 };
 
-}
+} // namespace epic
 
 #endif // UTIL_MEMORY_H

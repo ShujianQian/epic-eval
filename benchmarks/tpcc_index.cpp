@@ -18,7 +18,8 @@ TpccIndex::TpccIndex(const TpccConfig &tpcc_config)
     , g_warehouse_index(new StdHashtableIndex<WarehouseKey>(tpcc_config.num_warehouses * 2))
     , g_district_index(new StdHashtableIndex<DistrictKey>(tpcc_config.num_warehouses * 2 * 20))
     , g_customer_index(new StdHashtableIndex<CustomerKey>(tpcc_config.num_warehouses * 2 * 20 * 96'000))
-    , g_history_index(new StdHashtableIndex<HistoryKey>(tpcc_config.num_warehouses * 2 * 20 * 96'000 * tpcc_config.num_warehouses * 2 * 20))
+    , g_history_index(new StdHashtableIndex<HistoryKey>(
+          tpcc_config.num_warehouses * 2 * 20 * 96'000 * tpcc_config.num_warehouses * 2 * 20))
     , g_new_order_index(new StdHashtableIndex<NewOrderKey>(tpcc_config.order_table_size))
     , g_order_index(new StdHashtableIndex<OrderKey>(tpcc_config.order_table_size))
     , g_order_line_index(new StdHashtableIndex<OrderLineKey>(tpcc_config.orderline_table_size))
@@ -74,6 +75,8 @@ void TpccIndex::indexTxnWrites(NewOrderTxnInput<FixedSizeTxn> *txn, void *index_
         {
             index->all_local = false;
         }
+        OrderLineKey orderline_key = {txn->o_id, txn->d_id, txn->origin_w_id, i + 1};
+        index->items[i].order_line_id = g_order_line_index->findOrInsertRow(orderline_key, epoch_id);
         index->items[i].order_quantities = txn->items[i].order_quantities;
     }
 }
@@ -85,11 +88,11 @@ void TpccIndex::indexTxnReads(NewOrderTxnInput<FixedSizeTxn> *txn, void *index_p
     index->customer_id = g_customer_index->findRow(customer_key, epoch_id);
     DistrictKey district_key = {txn->d_id, txn->origin_w_id};
     index->district_id = g_district_index->findRow(district_key, epoch_id);
-    WarehouseKey warehouse_key = {txn->origin_w_id};
+    WarehouseKey warehouse_key{txn->origin_w_id};
     index->warehouse_id = g_warehouse_index->findRow(warehouse_key, epoch_id);
     for (uint32_t i = 0; i < txn->num_items; ++i)
     {
-        ItemKey item_key = {txn->items[i].i_id};
+        ItemKey item_key{txn->items[i].i_id};
         index->items[i].item_id = g_item_index->findRow(item_key, 0);
     }
 }
@@ -126,7 +129,7 @@ void TpccLoader::loadWarehouseTable()
     std::vector<uint32_t> warehouse_ids(tpcc_config.num_warehouses);
     for (uint32_t i = 0; i < tpcc_config.num_warehouses; ++i)
     {
-        warehouse_ids[i] = index.g_warehouse_index->findOrInsertRow({i + 1}, 0);
+        warehouse_ids[i] = index.g_warehouse_index->findOrInsertRow(WarehouseKey{i + 1}, 0);
     }
     /* TODO: populate data in Warehouse Table */
 }
@@ -200,7 +203,7 @@ void TpccLoader::loadItemTable()
     size_t i = 0;
     for (uint32_t i_id = 1; i_id <= 100'000; ++i_id)
     {
-        item_ids[i++] = index.g_item_index->findOrInsertRow({i_id}, 0);
+        item_ids[i++] = index.g_item_index->findOrInsertRow(ItemKey{i_id}, 0);
     }
     /* TODO: populate data in Item Table */
 }

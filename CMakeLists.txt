@@ -3,14 +3,16 @@ cmake_minimum_required(VERSION 3.18)
 project(epic CXX)
 
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(CUDA QUIET)
 
 if (CUDA_FOUND)
     set(CMAKE_CUDA_SEPARABLE_COMPILATION ON)
     enable_language(CUDA)
-    add_definitions(-DCUDA_AVAILABLE)
+    add_definitions(-DEPIC_CUDA_AVAILABLE)
     set(CMAKE_CUDA_STANDARD 17)
+    set(CMAKE_CUDA_FLAGS_DEBUG "-g -G")
 else ()
     message(WARNING "CUDA not found, using CPU only. CUDA Related modules will not be available.")
 endif ()
@@ -28,7 +30,8 @@ add_library(epic_main SHARED util_log.cpp util_math.cpp
         benchmarks/ycsb.cpp
         benchmarks/tpcc_txn.cpp
         benchmarks/tpcc.cpp
-        benchmarks/tpcc_index.cpp)
+        benchmarks/tpcc_index.cpp
+        txn_bridge.cpp)
 target_include_directories(epic_main PUBLIC ${EPIC_INCLUDE_DIR})
 
 add_executable(epic main.cpp)
