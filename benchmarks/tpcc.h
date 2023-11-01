@@ -9,6 +9,7 @@
 #include "tpcc_common.h"
 #include "tpcc_table.h"
 #include "tpcc_txn.h"
+#include <benchmarks/tpcc_storage.h>
 #include "benchmarks/tpcc_submitter.h"
 
 #include <memory>
@@ -16,8 +17,8 @@
 #include "execution_planner.h"
 #include "table.h"
 #include "txn_bridge.h"
-#include "version.h"
-#include "record.h"
+#include <benchmarks/tpcc_executor.h>
+#include <benchmarks/tpcc_gpu_executor.h>
 
 namespace epic::tpcc {
 
@@ -50,32 +51,10 @@ private:
     std::shared_ptr<TableExecutionPlanner> stock_planner;
     std::shared_ptr<TpccSubmitter> submitter;
 
-    struct TpccVersions
-    {
-        Version<WarehouseValue> *warehouse_version = nullptr;
-        Version<DistrictValue> *district_version = nullptr;
-        Version<CustomerValue> *customer_version = nullptr;
-        Version<HistoryValue> *history_version = nullptr;
-        Version<NewOrderValue> *new_order_version = nullptr;
-        Version<OrderValue> *order_version = nullptr;
-        Version<OrderLineValue> *order_line_version = nullptr;
-        Version<ItemValue> *item_version = nullptr;
-        Version<StockValue> *stock_version = nullptr;
-    } versions;
+    TpccRecords records;
+    TpccVersions versions;
 
-    struct TpccRecords
-    {
-        Record<WarehouseValue> *warehouse_record = nullptr;
-        Record<DistrictValue> *district_record = nullptr;
-        Record<CustomerValue> *customer_record = nullptr;
-        Record<HistoryValue> *history_record = nullptr;
-        Record<NewOrderValue> *new_order_record = nullptr;
-        Record<OrderValue> *order_record = nullptr;
-        Record<OrderLineValue> *order_line_record = nullptr;
-        Record<ItemValue> *item_record = nullptr;
-        Record<StockValue> *stock_record = nullptr;
-    } records;
-
+    std::shared_ptr<Executor> executor;
 public:
     explicit TpccDb(TpccConfig config);
 

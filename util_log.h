@@ -49,6 +49,10 @@ public:
         logger->error(fmt, args...);
     }
 
+    void flush() {
+        logger->flush();
+    }
+
     std::shared_ptr<spdlog::logger> logger = nullptr;
 
 private:

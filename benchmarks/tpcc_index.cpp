@@ -15,16 +15,15 @@ namespace epic::tpcc {
 
 TpccIndex::TpccIndex(const TpccConfig &tpcc_config)
     : tpcc_config(tpcc_config)
-    , g_warehouse_index(new StdHashtableIndex<WarehouseKey>(tpcc_config.num_warehouses * 2))
-    , g_district_index(new StdHashtableIndex<DistrictKey>(tpcc_config.num_warehouses * 2 * 20))
-    , g_customer_index(new StdHashtableIndex<CustomerKey>(tpcc_config.num_warehouses * 2 * 20 * 96'000))
-    , g_history_index(new StdHashtableIndex<HistoryKey>(
-          tpcc_config.num_warehouses * 2 * 20 * 96'000 * tpcc_config.num_warehouses * 2 * 20))
-    , g_new_order_index(new StdHashtableIndex<NewOrderKey>(tpcc_config.order_table_size))
-    , g_order_index(new StdHashtableIndex<OrderKey>(tpcc_config.order_table_size))
-    , g_order_line_index(new StdHashtableIndex<OrderLineKey>(tpcc_config.orderline_table_size))
-    , g_item_index(new StdHashtableIndex<ItemKey>(200'000))
-    , g_stock_index(new StdHashtableIndex<StockKey>(200'000 * tpcc_config.num_warehouses * 2))
+    , g_warehouse_index(new StdHashtableIndex<WarehouseKey>(tpcc_config.warehouseTableSize()))
+    , g_district_index(new StdHashtableIndex<DistrictKey>(tpcc_config.districtTableSize()))
+    , g_customer_index(new StdHashtableIndex<CustomerKey>(tpcc_config.customerTableSize()))
+    , g_history_index(new StdHashtableIndex<HistoryKey>(tpcc_config.historyTableSize()))
+    , g_new_order_index(new StdHashtableIndex<NewOrderKey>(tpcc_config.newOrderTableSize()))
+    , g_order_index(new StdHashtableIndex<OrderKey>(tpcc_config.orderTableSize()))
+    , g_order_line_index(new StdHashtableIndex<OrderLineKey>(tpcc_config.orderLineTableSize()))
+    , g_item_index(new StdHashtableIndex<ItemKey>(tpcc_config.itemTableSize()))
+    , g_stock_index(new StdHashtableIndex<StockKey>(tpcc_config.stockTableSize()))
 {}
 
 void TpccIndex::indexTxnWrites(BaseTxn *txn, BaseTxn *index, uint32_t epoch_id)

@@ -2,14 +2,15 @@
 // Created by Shujian Qian on 2023-10-25.
 //
 
-#ifndef RECORD_H
-#define RECORD_H
+#ifndef STORAGE_H
+#define STORAGE_H
 
 #include <cstdint>
 #include <xmmintrin.h>
 
 #include <execution_planner.h>
 #include <util_opt.h>
+#include <util_arch.h>
 
 namespace epic {
 
@@ -18,7 +19,10 @@ struct Record
 {
     uint32_t version1 = 0, version2 = 0;
     ValueType value1, value2;
-};
+} __attribute__((aligned(kDeviceCacheLineSize)));
+
+/* make sure Version is properly aligned for GPU atomic operations */
+static_assert(sizeof(Record<int>) == kDeviceCacheLineSize);
 
 /* make sure that the two versions are adjacent in memory, so they can be atomically read with 64bit instr */
 static_assert(offsetof(Record<int>, version2) - offsetof(Record<int>, version1) == sizeof(uint32_t));
@@ -28,7 +32,10 @@ struct Version
 {
     uint32_t version = 0;
     ValueType value;
-};
+} __attribute__((aligned(kDeviceCacheLineSize)));
+
+/* make sure Version is properly aligned for GPU atomic operations */
+static_assert(sizeof(Version<int>) == kDeviceCacheLineSize);
 
 template<typename ValueType>
 EPIC_FORCE_INLINE void readFromTable(Record<ValueType> *record, Version<ValueType> *version, uint32_t record_id,
@@ -40,8 +47,8 @@ EPIC_FORCE_INLINE void readFromTable(Record<ValueType> *record, Version<ValueTyp
         /* reading the version from previous epoch, no syncronization needed */
         uint64_t combined_versions =
             __atomic_load_n(reinterpret_cast<uint64_t *>(&record[record_id].version1), __ATOMIC_ACQUIRE);
-        uint32_t version1 = combined_versions >> 32;
-        uint32_t version2 = combined_versions & 0xFFFFFFFF;
+        uint32_t version1 = combined_versions & 0xFFFFFFFF;
+        uint32_t version2 = combined_versions >> 32;
         ValueType *value_to_read = nullptr;
         if (version1 == epoch)
         {
@@ -72,8 +79,8 @@ EPIC_FORCE_INLINE void readFromTable(Record<ValueType> *record, Version<ValueTyp
     {
         uint64_t combined_versions =
             __atomic_load_n(reinterpret_cast<uint64_t *>(&record[record_id].version1), __ATOMIC_ACQUIRE);
-        uint32_t version1 = combined_versions >> 32;
-        uint32_t version2 = combined_versions & 0xFFFFFFFF;
+        uint32_t version1 = combined_versions & 0xFFFFFFFF;
+        uint32_t version2 = combined_versions >> 32;
         ValueType *value_to_read = nullptr;
         if (version1 == epoch)
         {
@@ -124,8 +131,8 @@ EPIC_FORCE_INLINE void writeToTable(Record<ValueType> *record, Version<ValueType
         uint64_t combined_versions =
             __atomic_load_n(reinterpret_cast<uint64_t *>(&record[record_id].version1), __ATOMIC_ACQUIRE);
         /* TODO: I don't think atomic read is required here */
-        uint32_t version1 = combined_versions >> 32;
-        uint32_t version2 = combined_versions & 0xFFFFFFFF;
+        uint32_t version1 = combined_versions & 0xFFFFFFFF;
+        uint32_t version2 = combined_versions >> 32;
         if (version1 < version2)
         {
             /* version2 is the latest version before this epoch (record_a) */
@@ -149,4 +156,4 @@ EPIC_FORCE_INLINE void writeToTable(Record<ValueType> *record, Version<ValueType
 
 } // namespace epic
 
-#endif // RECORD_H
+#endif // STORAGE_H

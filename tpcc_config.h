@@ -35,6 +35,43 @@ struct TpccConfig
     DeviceType index_device = DeviceType::CPU;
     DeviceType initialize_device = DeviceType::GPU;
     DeviceType execution_device = DeviceType::GPU;
+
+    size_t warehouseTableSize() const
+    {
+        return num_warehouses * 2;
+    }
+    size_t districtTableSize() const
+    {
+        return num_warehouses * 2 * 20;
+    }
+    size_t customerTableSize() const
+    {
+        return num_warehouses * 2 * 20 * 96'000;
+    }
+    size_t historyTableSize() const
+    {
+        return num_warehouses * 2 * 20 * 96'000 * num_warehouses * 2 * 20;
+    }
+    size_t newOrderTableSize() const
+    {
+        return order_table_size;
+    }
+    size_t orderTableSize() const
+    {
+        return order_table_size;
+    }
+    size_t orderLineTableSize() const
+    {
+        return orderline_table_size;
+    }
+    size_t itemTableSize() const
+    {
+        return 200'000;
+    }
+    size_t stockTableSize() const
+    {
+        return 200'000 * num_warehouses * 2;
+    }
 };
 
 } // namespace epic::tpcc

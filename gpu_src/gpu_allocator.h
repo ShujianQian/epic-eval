@@ -15,6 +15,7 @@ class GpuAllocator : public Allocator
 public:
     void *Allocate(size_t size) override;
     void Free(void *ptr) override;
+    void PrintMemoryInfo();
 };
 } // namespace epic
 

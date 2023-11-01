@@ -25,8 +25,8 @@ public:
     size_t num_txns;
     template<typename TxnType>
     explicit GpuTxnArray(TxnArray<TxnType> &txn_array)
+    : kBaseTxnSize(BaseTxnSize<TxnType>::value)
     {
-        kBaseTxnSize = BaseTxnSize<TxnType>::value;
         txns = txn_array.txns;
         num_txns = txn_array.num_txns;
     }
@@ -39,7 +39,7 @@ public:
         gpu_err_check(cudaMalloc(&txns, kBaseTxnSize * num_txns));
     };
 
-    __device__ __host__ inline BaseTxn *getTxn(size_t index)
+    __device__ __host__ inline BaseTxn *getTxn(size_t index) const
     {
         assert(index < num_txns);
         size_t offset = index * kBaseTxnSize;

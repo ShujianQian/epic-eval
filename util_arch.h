@@ -9,6 +9,7 @@
 
 namespace epic {
 constexpr size_t kHostCacheLineSize = 64;
+constexpr size_t kDeviceWarpSize = 32;
 constexpr size_t kDeviceCacheLineSize = 128;
 } // namespace epic
 

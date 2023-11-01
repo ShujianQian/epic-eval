@@ -13,7 +13,7 @@ namespace epic::tpcc {
 
 enum class TpccTxnType : uint32_t
 {
-    NEW_ORDER = 0,
+    NEW_ORDER = 1,
     PAYMENT,
     ORDER_STATUS,
     DELIVERY,
@@ -136,12 +136,12 @@ union TpccTxn
 union TpccTxnParam
 {
     NewOrderTxnParams<FixedSizeTxn> new_order_txn;
-};
+} __attribute__((aligned(4)));
 
 union TpccExecPlan
 {
     NewOrderExecPlan<FixedSizeTxn> new_order_txn;
-};
+} __attribute__((aligned(4)));
 
 /* TODO: how to implement piece exection on GPU? */
 void runTransaction(BaseTxn *txn);
