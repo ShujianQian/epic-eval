@@ -14,7 +14,7 @@ void runTransaction(BaseTxn *txn)
         runTransaction(reinterpret_cast<NewOrderTxnInput<FixedSizeTxn> *>(txn->data));
         break;
     case TpccTxnType::PAYMENT:
-        runTransaction(reinterpret_cast<PaymentTxn *>(txn->data));
+        runTransaction(reinterpret_cast<PaymentTxnInput *>(txn->data));
         break;
     default:
         break;
@@ -23,6 +23,6 @@ void runTransaction(BaseTxn *txn)
 
 void runTransaction(NewOrderTxnInput<FixedSizeTxn> *txn) {}
 
-void runTransaction(PaymentTxn *txn) {}
+void runTransaction(PaymentTxnInput *txn) {}
 
 } // namespace epic::tpcc

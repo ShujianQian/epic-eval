@@ -88,16 +88,14 @@ __forceinline__ __device__ void gpuReadFromTableCoop(Record<ValueType> *record, 
                 /* version 1 will be written in this epoch (record_b) */
                 value_to_read = &record[record_id].value1;
                 /* wait until version 1 is written */
-                while (atomicAdd(&record[record_id].version1, 0) != epoch)
-                    ;
+                while (atomicAdd(&record[record_id].version1, 0) != epoch) {}
             }
             else
             {
                 /* version 2 will be written in this epohc (record_b) */
                 value_to_read = &record[record_id].value2;
                 /* wait until version 2 is written */
-                while (atomicAdd(&record[record_id].version1, 0) != epoch)
-                    ;
+                while (atomicAdd(&record[record_id].version2, 0) != epoch) {}
             }
         }
         else
@@ -105,8 +103,7 @@ __forceinline__ __device__ void gpuReadFromTableCoop(Record<ValueType> *record, 
             /* version read */
             value_to_read = &version[read_loc].value;
             /* wait until version is written */
-            while (atomicAdd(&version[read_loc].version, 0) != epoch)
-                ;
+            while (atomicAdd(&version[read_loc].version, 0) != epoch) {}
         }
     }
     /* broadcast the value to read */

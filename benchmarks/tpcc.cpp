@@ -46,11 +46,11 @@ TpccDb::TpccDb(TpccConfig config)
     {
         GpuAllocator allocator;
         warehouse_planner = std::make_unique<GpuTableExecutionPlanner>(
-            "warehouse", allocator, 0, 1, config.num_txns, config.num_warehouses, initialization_output);
+            "warehouse", allocator, 0, 2, config.num_txns, config.num_warehouses, initialization_output);
         district_planner = std::make_unique<GpuTableExecutionPlanner>(
-            "district", allocator, 0, 1, config.num_txns, config.num_warehouses * 10, initialization_output);
+            "district", allocator, 0, 2, config.num_txns, config.num_warehouses * 10, initialization_output);
         customer_planner = std::make_unique<GpuTableExecutionPlanner>(
-            "customer", allocator, 0, 1, config.num_txns, config.num_warehouses * 10 * 3000, initialization_output);
+            "customer", allocator, 0, 2, config.num_txns, config.num_warehouses * 10 * 3000, initialization_output);
         history_planner = std::make_unique<GpuTableExecutionPlanner>(
             "history", allocator, 0, 1, config.num_txns, config.num_warehouses * 10 * 3000, initialization_output);
         new_order_planner = std::make_unique<GpuTableExecutionPlanner>(
@@ -119,22 +119,23 @@ TpccDb::TpccDb(TpccConfig config)
 
         GpuAllocator allocator;
 
+        /* CAUTION: version size is based on the number of transactions, and will cause sync issue if too small */
         size_t warehouse_rec_size = sizeof(Record<WarehouseValue>) * config.warehouseTableSize();
-        size_t warehouse_ver_size = sizeof(Version<WarehouseValue>) * config.warehouseTableSize();
+        size_t warehouse_ver_size = sizeof(Version<WarehouseValue>) * config.num_txns;
         logger.Info("Warehouse record: {}, version: {}", formatSizeBytes(warehouse_rec_size),
             formatSizeBytes(warehouse_ver_size));
         records.warehouse_record = static_cast<Record<WarehouseValue> *>(allocator.Allocate(warehouse_rec_size));
         versions.warehouse_version = static_cast<Version<WarehouseValue> *>(allocator.Allocate(warehouse_ver_size));
 
         size_t district_rec_size = sizeof(Record<DistrictValue>) * config.districtTableSize();
-        size_t district_ver_size = sizeof(Version<DistrictValue>) * config.districtTableSize();
+        size_t district_ver_size = sizeof(Version<DistrictValue>) * config.num_txns;
         logger.Info(
             "District record: {}, version: {}", formatSizeBytes(district_rec_size), formatSizeBytes(district_ver_size));
         records.district_record = static_cast<Record<DistrictValue> *>(allocator.Allocate(district_rec_size));
         versions.district_version = static_cast<Version<DistrictValue> *>(allocator.Allocate(district_ver_size));
 
         size_t customer_rec_size = sizeof(Record<CustomerValue>) * config.customerTableSize();
-        size_t customer_ver_size = sizeof(Version<CustomerValue>) * config.customerTableSize();
+        size_t customer_ver_size = sizeof(Version<CustomerValue>) * config.num_txns;
         logger.Info(
             "Customer record: {}, version: {}", formatSizeBytes(customer_rec_size), formatSizeBytes(customer_ver_size));
         records.customer_record = static_cast<Record<CustomerValue> *>(allocator.Allocate(customer_rec_size));
@@ -149,27 +150,27 @@ TpccDb::TpccDb(TpccConfig config)
         //        versions.history_version = static_cast<Version<HistoryValue> *>(allocator.Allocate(history_ver_size));
 
         size_t new_order_rec_size = sizeof(Record<NewOrderValue>) * config.newOrderTableSize();
-        size_t new_order_ver_size = sizeof(Version<NewOrderValue>) * config.newOrderTableSize();
+        size_t new_order_ver_size = sizeof(Version<NewOrderValue>) * config.num_txns; /* TODO: not needed */
         logger.Info("NewOrder record: {}, version: {}", formatSizeBytes(new_order_rec_size),
             formatSizeBytes(new_order_ver_size));
         records.new_order_record = static_cast<Record<NewOrderValue> *>(allocator.Allocate(new_order_rec_size));
         versions.new_order_version = static_cast<Version<NewOrderValue> *>(allocator.Allocate(new_order_ver_size));
 
         size_t order_rec_size = sizeof(Record<OrderValue>) * config.orderTableSize();
-        size_t order_ver_size = sizeof(Version<OrderValue>) * config.orderTableSize();
+        size_t order_ver_size = sizeof(Version<OrderValue>) * config.num_txns; /* TODO: not needed */
         logger.Info("Order record: {}, version: {}", formatSizeBytes(order_rec_size), formatSizeBytes(order_ver_size));
         records.order_record = static_cast<Record<OrderValue> *>(allocator.Allocate(order_rec_size));
         versions.order_version = static_cast<Version<OrderValue> *>(allocator.Allocate(order_ver_size));
 
         size_t order_line_rec_size = sizeof(Record<OrderLineValue>) * config.orderLineTableSize();
-        size_t order_line_ver_size = sizeof(Version<OrderLineValue>) * config.orderLineTableSize();
+        size_t order_line_ver_size = sizeof(Version<OrderLineValue>) * config.num_txns * 15; /* TODO: not needed */
         logger.Info("OrderLine record: {}, version: {}", formatSizeBytes(order_line_rec_size),
             formatSizeBytes(order_line_ver_size));
         records.order_line_record = static_cast<Record<OrderLineValue> *>(allocator.Allocate(order_line_rec_size));
         versions.order_line_version = static_cast<Version<OrderLineValue> *>(allocator.Allocate(order_line_ver_size));
 
         size_t item_rec_size = sizeof(Record<ItemValue>) * config.itemTableSize();
-        size_t item_ver_size = sizeof(Version<ItemValue>) * config.itemTableSize();
+        size_t item_ver_size = sizeof(Version<ItemValue>) * config.num_txns * 15; /* TODO: not needed */
         logger.Info("Item record: {}, version: {}", formatSizeBytes(item_rec_size), formatSizeBytes(item_ver_size));
         records.item_record = static_cast<Record<ItemValue> *>(allocator.Allocate(item_rec_size));
         versions.item_version = static_cast<Version<ItemValue> *>(allocator.Allocate(item_ver_size));
@@ -232,8 +233,8 @@ public:
 struct TpccTxnGenerator
 {
     std::mt19937_64 gen;
-    std::uniform_int_distribution<uint32_t> txn_type_dist, w_id_dist, d_id_dist, num_item_dist, remote_order_dist,
-        order_quantity_dist;
+    std::uniform_int_distribution<uint32_t> txn_type_dist, w_id_dist, d_id_dist, num_item_dist, percentage_gen,
+        order_quantity_dist, payment_amount_dist;
     TpccNuRand c_id_dist, i_id_dist;
     TpccOIdGenerator o_id_gen;
 
@@ -247,8 +248,9 @@ struct TpccTxnGenerator
         , c_id_dist(1023, 1, 3000)
         , i_id_dist(8191, 1, 100'000)
         , num_item_dist(5, 15)
-        , remote_order_dist(1, 100)
+        , percentage_gen(1, 100)
         , order_quantity_dist(1, 10)
+        , payment_amount_dist(1, 5000)
         , config(config)
     {}
 
@@ -305,7 +307,7 @@ struct TpccTxnGenerator
             } while (retry);
 
             /* no remote warehouse for single warehouse configs, otherwise 1% remote orders */
-            bool supply_from_remote = config.num_warehouses > 1 && (remote_order_dist(gen) == 1);
+            bool supply_from_remote = config.num_warehouses > 1 && (percentage_gen(gen) == 1);
             if (supply_from_remote)
             {
                 do
@@ -322,9 +324,29 @@ struct TpccTxnGenerator
         }
     }
 
-    void generateTxn(PaymentTxn *txn, uint32_t timestamp)
+    void generateTxn(PaymentTxnInput *txn, uint32_t timestamp)
     {
-        /* TODO: generate payment txn */
+        txn->warehouse_id = w_id_dist(gen);
+        txn->district_id = d_id_dist(gen);
+
+        /* no remote payment for singel warehouse configs, otherwise 15% remote payments */
+        bool pay_from_remote = config.num_warehouses > 1 && (percentage_gen(gen) <= 15);
+        if (pay_from_remote)
+        {
+            do
+            {
+                txn->customer_warehouse_id = w_id_dist(gen);
+            } while (txn->customer_warehouse_id == txn->warehouse_id);
+            txn->customer_district_id = d_id_dist(gen);
+        }
+        else
+        {
+            txn->customer_warehouse_id = txn->warehouse_id;
+            txn->customer_district_id = txn->district_id;
+        }
+
+        txn->customer_id = c_id_dist(gen);
+        txn->payment_amount = payment_amount_dist(gen);
     }
 
     void generateTxn(OrderStatusTxn *txn, uint32_t timestamp)
@@ -352,7 +374,7 @@ struct TpccTxnGenerator
             generateTxn(reinterpret_cast<NewOrderTxnInput<FixedSizeTxn> *>(txn->data), timestamp);
             break;
         case TpccTxnType::PAYMENT:
-            generateTxn(reinterpret_cast<PaymentTxn *>(txn->data), timestamp);
+            generateTxn(reinterpret_cast<PaymentTxnInput *>(txn->data), timestamp);
             break;
         case TpccTxnType::ORDER_STATUS:
             generateTxn(reinterpret_cast<OrderStatusTxn *>(txn->data), timestamp);
@@ -497,11 +519,16 @@ void TpccDb::runBenchmark()
                 uint8_t execution_plan[max_print_size * base_txn_size];
 
                 auto locToStr = [](uint32_t loc) -> std::string {
-                    if (loc == loc_record_a) {
+                    if (loc == loc_record_a)
+                    {
                         return "RECORD_A";
-                    } else if (loc == loc_record_b) {
+                    }
+                    else if (loc == loc_record_b)
+                    {
                         return "RECORD_B";
-                    } else {
+                    }
+                    else
+                    {
                         return std::to_string(loc);
                     }
                 };
@@ -510,19 +537,36 @@ void TpccDb::runBenchmark()
                 for (int i = 0; i < print_size; ++i)
                 {
                     auto base_txn = reinterpret_cast<BaseTxn *>(execution_plan + i * base_txn_size);
-                    auto txn = reinterpret_cast<NewOrderExecPlan<FixedSizeTxn> *>(base_txn->data);
-                    logger.Info("txn {} warehouse[{}] district[{}] customer[{}] new_order[{}] order[{}] "
-                                "item1[{}] stock_read1[{}] stock_write1[{}] order_line1[{}] "
-                                "item2[{}] stock_read2[{}] stock_write2[{}] order_line2[{}] "
-                                "item3[{}] stock_read3[{}] stock_write3[{}] order_line3[{}] "
-                                "item4[{}] stock_read4[{}] stock_write4[{}] order_line4[{}] "
-                                "item5[{}] stock_read5[{}] stock_write5[{}] order_line5[{}] ",
-                        i, locToStr(txn->warehouse_loc), locToStr(txn->district_loc), locToStr(txn->customer_loc), locToStr(txn->new_order_loc), locToStr(txn->order_loc),
-                        locToStr(txn->item_plans[0].item_loc), locToStr(txn->item_plans[0].stock_read_loc), locToStr(txn->item_plans[0].stock_write_loc), locToStr(txn->item_plans[0].orderline_loc),
-                        locToStr(txn->item_plans[1].item_loc), locToStr(txn->item_plans[1].stock_read_loc), locToStr(txn->item_plans[1].stock_write_loc), locToStr(txn->item_plans[1].orderline_loc),
-                        locToStr(txn->item_plans[2].item_loc), locToStr(txn->item_plans[2].stock_read_loc), locToStr(txn->item_plans[2].stock_write_loc), locToStr(txn->item_plans[2].orderline_loc),
-                        locToStr(txn->item_plans[3].item_loc), locToStr(txn->item_plans[3].stock_read_loc), locToStr(txn->item_plans[3].stock_write_loc), locToStr(txn->item_plans[3].orderline_loc),
-                        locToStr(txn->item_plans[4].item_loc), locToStr(txn->item_plans[4].stock_read_loc), locToStr(txn->item_plans[4].stock_write_loc), locToStr(txn->item_plans[4].orderline_loc));
+                    if (0)
+                    {
+                        auto txn = reinterpret_cast<NewOrderExecPlan<FixedSizeTxn> *>(base_txn->data);
+                        logger.Info("txn {} warehouse[{}] district[{}] customer[{}] new_order[{}] order[{}] "
+                                    "item1[{}] stock_read1[{}] stock_write1[{}] order_line1[{}] "
+                                    "item2[{}] stock_read2[{}] stock_write2[{}] order_line2[{}] "
+                                    "item3[{}] stock_read3[{}] stock_write3[{}] order_line3[{}] "
+                                    "item4[{}] stock_read4[{}] stock_write4[{}] order_line4[{}] "
+                                    "item5[{}] stock_read5[{}] stock_write5[{}] order_line5[{}] ",
+                            i, locToStr(txn->warehouse_loc), locToStr(txn->district_loc), locToStr(txn->customer_loc),
+                            locToStr(txn->new_order_loc), locToStr(txn->order_loc),
+                            locToStr(txn->item_plans[0].item_loc), locToStr(txn->item_plans[0].stock_read_loc),
+                            locToStr(txn->item_plans[0].stock_write_loc), locToStr(txn->item_plans[0].orderline_loc),
+                            locToStr(txn->item_plans[1].item_loc), locToStr(txn->item_plans[1].stock_read_loc),
+                            locToStr(txn->item_plans[1].stock_write_loc), locToStr(txn->item_plans[1].orderline_loc),
+                            locToStr(txn->item_plans[2].item_loc), locToStr(txn->item_plans[2].stock_read_loc),
+                            locToStr(txn->item_plans[2].stock_write_loc), locToStr(txn->item_plans[2].orderline_loc),
+                            locToStr(txn->item_plans[3].item_loc), locToStr(txn->item_plans[3].stock_read_loc),
+                            locToStr(txn->item_plans[3].stock_write_loc), locToStr(txn->item_plans[3].orderline_loc),
+                            locToStr(txn->item_plans[4].item_loc), locToStr(txn->item_plans[4].stock_read_loc),
+                            locToStr(txn->item_plans[4].stock_write_loc), locToStr(txn->item_plans[4].orderline_loc));
+                    }
+                    if (1)
+                    {
+                        auto txn = reinterpret_cast<PaymentTxnExecPlan *>(base_txn->data);
+                        logger.Info("txn {} warehouse[{}][{}] district[{}][{}] customer[{}][{}] history ", i,
+                            locToStr(txn->warehouse_read_loc), locToStr(txn->warehouse_write_loc),
+                            locToStr(txn->district_read_loc), locToStr(txn->district_write_loc),
+                            locToStr(txn->customer_read_loc), locToStr(txn->customer_write_loc));
+                    }
                 }
             }
 #endif

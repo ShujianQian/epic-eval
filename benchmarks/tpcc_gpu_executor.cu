@@ -25,7 +25,7 @@ constexpr uint32_t num_warps = block_size / kDeviceWarpSize;
 __device__ uint32_t txn_counter = 0; /* used for scheduling txns among threads */
 const uint32_t zero = 0;
 
-__device__ __forceinline__ void gpuExecNewOrderTxn(TpccRecords records, TpccVersions versions,
+__device__ __forceinline__ void gpuExecTpccTxn(TpccRecords records, TpccVersions versions,
     NewOrderTxnParams<FixedSizeTxn> *params, NewOrderExecPlan<FixedSizeTxn> *plan, uint32_t epoch, uint32_t lane_id,
     uint32_t txn_id /* for debug TODO: remove*/)
 {
@@ -33,9 +33,10 @@ __device__ __forceinline__ void gpuExecNewOrderTxn(TpccRecords records, TpccVers
     constexpr uint32_t all_lanes_mask = 0xffffffffu;
 
 #if 0 // DEBUG
-    if (txn_id < 100 && lane_id == leader_lane)
+    if (lane_id == leader_lane)
+//        if (txn_id < 100 && lane_id == leader_lane)
     {
-        printf("txn_id[%u] warehouse i[%u]l[%u] district i[%u]l[%u] "
+        printf("neworder txn_id[%u] warehouse i[%u]l[%u] district i[%u]l[%u] "
                "num_items[%u] "
                "item1[%u] stock_read1[%u] stock_write1[%u] orderline1_write[%u]"
                "\n",
@@ -65,8 +66,8 @@ __device__ __forceinline__ void gpuExecNewOrderTxn(TpccRecords records, TpccVers
     {
         gpuReadFromTableCoop(records.item_record, versions.item_version, params->items[i].item_id,
             plan->item_plans[i].item_loc, epoch, result, lane_id);
-//        gpuReadFromTableCoop(records.stock_record, versions.stock_version, params->items[i].stock_id,
-//                             loc_record_a, epoch, result, lane_id);
+        //        gpuReadFromTableCoop(records.stock_record, versions.stock_version, params->items[i].stock_id,
+        //                             loc_record_a, epoch, result, lane_id);
         gpuReadFromTableCoop(records.stock_record, versions.stock_version, params->items[i].stock_id,
             plan->item_plans[i].stock_read_loc, epoch, result, lane_id);
         gpuWriteToTableCoop(records.stock_record, versions.stock_version, params->items[i].stock_id,
@@ -74,6 +75,41 @@ __device__ __forceinline__ void gpuExecNewOrderTxn(TpccRecords records, TpccVers
         gpuWriteToTableCoop(records.order_line_record, versions.order_line_version, params->items[i].order_line_id,
             plan->item_plans[i].orderline_loc, epoch, result, lane_id);
     }
+}
+
+__device__ __forceinline__ void gpuExecTpccTxn(TpccRecords records, TpccVersions versions, PaymentTxnParams *params,
+    PaymentTxnExecPlan *plan, uint32_t epoch, uint32_t lane_id, uint32_t txn_id /* for debug TODO: remove*/)
+{
+    constexpr uint32_t leader_lane = 0;
+    constexpr uint32_t all_lanes_mask = 0xffffffffu;
+
+#if 0 // DEBUG
+    {
+//                if (lane_id == leader_lane && txn_id < 100)
+        if (lane_id == leader_lane)
+        {
+            printf("payment txn_id[%u] warehouse i[%u]rl[%u]wl[%u] district i[%u]rl[%u]wl[%u] customer i[%u]rl[%u]wl[%u] "
+                   "payment_amount[%u]\n",
+                txn_id, params->warehouse_id, plan->warehouse_read_loc, plan->warehouse_write_loc, params->district_id,
+                plan->district_read_loc, plan->district_write_loc, params->customer_id, plan->customer_read_loc,
+                plan->customer_write_loc, params->payment_amount);
+        }
+    }
+#endif
+
+    uint32_t result;
+    gpuReadFromTableCoop(records.warehouse_record, versions.warehouse_version, params->warehouse_id,
+        plan->warehouse_read_loc, epoch, result, lane_id);
+    gpuWriteToTableCoop(records.warehouse_record, versions.warehouse_version, params->warehouse_id,
+        plan->warehouse_write_loc, epoch, result, lane_id);
+    gpuReadFromTableCoop(records.district_record, versions.district_version, params->district_id,
+        plan->district_read_loc, epoch, result, lane_id);
+    gpuWriteToTableCoop(records.district_record, versions.district_version, params->district_id,
+        plan->district_write_loc, epoch, result, lane_id);
+    gpuReadFromTableCoop(records.customer_record, versions.customer_version, params->customer_id,
+        plan->customer_read_loc, epoch, result, lane_id);
+    gpuWriteToTableCoop(records.customer_record, versions.customer_version, params->customer_id,
+        plan->customer_write_loc, epoch, result, lane_id);
 }
 
 __global__ void gpuExecKernel(
@@ -123,12 +159,19 @@ __global__ void gpuExecKernel(
     switch (static_cast<TpccTxnType>((reinterpret_cast<BaseTxn *>(txn_param[warp_id])->txn_type)))
     {
     case TpccTxnType::NEW_ORDER:
-        gpuExecNewOrderTxn(records, versions,
+        gpuExecTpccTxn(records, versions,
             reinterpret_cast<NewOrderTxnParams<FixedSizeTxn> *>(reinterpret_cast<BaseTxn *>(txn_param[warp_id])->data),
             reinterpret_cast<NewOrderExecPlan<FixedSizeTxn> *>(reinterpret_cast<BaseTxn *>(exec_plan[warp_id])->data),
             epoch, lane_id, warp_txn_id);
         break;
+    case TpccTxnType::PAYMENT:
+        gpuExecTpccTxn(records, versions,
+            reinterpret_cast<PaymentTxnParams *>(reinterpret_cast<BaseTxn *>(txn_param[warp_id])->data),
+            reinterpret_cast<PaymentTxnExecPlan *>(reinterpret_cast<BaseTxn *>(exec_plan[warp_id])->data), epoch,
+            lane_id, warp_txn_id);
+        break;
     default:
+        /* TODO: implement execution for the rest of txn types */
         break;
     }
 }

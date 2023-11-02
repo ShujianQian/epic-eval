@@ -92,6 +92,19 @@ static __device__ __forceinline__ void prepareSubmitTpccTxn(
     num_ops.stock_num_ops[txn_id] = num_items * 2;
 }
 
+static __device__ __forceinline__ void prepareSubmitTpccTxn(int txn_id, PaymentTxnParams *txn, TpccNumOps num_ops)
+{
+    num_ops.warehouse_num_ops[txn_id] = 2;
+    num_ops.district_num_ops[txn_id] = 2;
+    num_ops.customer_num_ops[txn_id] = 2;
+    num_ops.history_num_ops[txn_id] = 0; /* TODO: deal with history table later */
+    num_ops.order_num_ops[txn_id] = 0;
+    num_ops.new_order_num_ops[txn_id] = 0;
+    num_ops.order_line_num_ops[txn_id] = 0;
+    num_ops.item_num_ops[txn_id] = 0;
+    num_ops.stock_num_ops[txn_id] = 0;
+}
+
 static __global__ void prepareSubmitTpccTxn(TxnArray<TpccTxnParam> txn_array, TpccNumOps num_ops)
 {
     int txn_id = blockIdx.x * blockDim.x + threadIdx.x;
@@ -106,12 +119,16 @@ static __global__ void prepareSubmitTpccTxn(TxnArray<TpccTxnParam> txn_array, Tp
         prepareSubmitTpccTxn(txn_id, reinterpret_cast<NewOrderTxnParams<FixedSizeTxn> *>(base_txn->data), num_ops);
         break;
     case TpccTxnType::PAYMENT:
+        prepareSubmitTpccTxn(txn_id, reinterpret_cast<PaymentTxnParams *>(base_txn->data), num_ops);
         break;
     case TpccTxnType::ORDER_STATUS:
+        /* TODO: implement prepare submit for order status */
         break;
     case TpccTxnType::DELIVERY:
+        /* TODO: implement prepare submit for delivery */
         break;
     case TpccTxnType::STOCK_LEVEL:
+        /* TODO: implement prepare submit for stock level */
         break;
     default:
         assert(false);
@@ -147,7 +164,24 @@ static __device__ __forceinline__ void submitTpccTxn(
             CREATE_OP(txn->items[i].stock_id, txn_id, write_op,
                 offsetof(NewOrderExecPlan<FixedSizeTxn>, item_plans[i].stock_write_loc) / sizeof(uint32_t));
     }
-    __threadfence();
+    __threadfence(); /* TODO: remove this */
+}
+
+static __device__ __forceinline__ void submitTpccTxn(int txn_id, PaymentTxnParams *txn, TpccSubmitLocations submit_loc)
+{
+    static_cast<uint64_t *>(submit_loc.warehouse_dest)[submit_loc.warehouse_offset[txn_id]] = CREATE_OP(
+        txn->warehouse_id, txn_id, read_op, offsetof(PaymentTxnExecPlan, warehouse_read_loc) / sizeof(uint32_t));
+    static_cast<uint64_t *>(submit_loc.warehouse_dest)[submit_loc.warehouse_offset[txn_id] + 1] = CREATE_OP(
+        txn->warehouse_id, txn_id, write_op, offsetof(PaymentTxnExecPlan, warehouse_write_loc) / sizeof(uint32_t));
+    static_cast<uint64_t *>(submit_loc.district_dest)[submit_loc.district_offset[txn_id]] = CREATE_OP(
+        txn->district_id, txn_id, read_op, offsetof(PaymentTxnExecPlan, district_read_loc) / sizeof(uint32_t));
+    static_cast<uint64_t *>(submit_loc.district_dest)[submit_loc.district_offset[txn_id] + 1] = CREATE_OP(
+        txn->district_id, txn_id, write_op, offsetof(PaymentTxnExecPlan, district_write_loc) / sizeof(uint32_t));
+    static_cast<uint64_t *>(submit_loc.customer_dest)[submit_loc.customer_offset[txn_id]] = CREATE_OP(
+        txn->customer_id, txn_id, read_op, offsetof(PaymentTxnExecPlan, customer_read_loc) / sizeof(uint32_t));
+    static_cast<uint64_t *>(submit_loc.customer_dest)[submit_loc.customer_offset[txn_id] + 1] = CREATE_OP(
+        txn->customer_id, txn_id, write_op, offsetof(PaymentTxnExecPlan, customer_write_loc) / sizeof(uint32_t));
+    __threadfence(); /* TODO: remove this */
 }
 
 static __global__ void submitTpccTxn(TxnArray<TpccTxnParam> txn_array, TpccSubmitLocations submit_loc)
@@ -162,22 +196,20 @@ static __global__ void submitTpccTxn(TxnArray<TpccTxnParam> txn_array, TpccSubmi
     {
     case TpccTxnType::NEW_ORDER:
         submitTpccTxn(txn_id, reinterpret_cast<NewOrderTxnParams<FixedSizeTxn> *>(base_txn->data), submit_loc);
-        //        printf("txn %d is new order\n", txn_id);
         break;
     case TpccTxnType::PAYMENT:
-        //        printf("txn %d is payment\n", txn_id);
+        submitTpccTxn(txn_id, reinterpret_cast<PaymentTxnParams *>(base_txn->data), submit_loc);
         break;
     case TpccTxnType::ORDER_STATUS:
-        //        printf("txn %d is order status\n", txn_id);
+        /* TODO: implement submit for order status */
         break;
     case TpccTxnType::DELIVERY:
-        //        printf("txn %d is delivery\n", txn_id);
+        /* TODO: implement submit for delivery */
         break;
     case TpccTxnType::STOCK_LEVEL:
-        //        printf("txn %d is stock level\n", txn_id);
+        /* TODO: implement submit for stock level */
         break;
     default:
-        //        printf("txn %d is unknown\n", txn_id);
         assert(false);
     }
 }
@@ -297,13 +329,13 @@ void TpccGpuSubmitter::submit(TxnArray<TpccTxnParam> &txn_array)
     logger.Info("stock num ops: {}", stock_submit_dest.curr_num_ops);
 
 #if 0 /* for debugging only */
-         op_t ops[100];
-         gpu_err_check(cudaMemcpy(ops, stock_submit_dest.d_submitted_ops, sizeof(op_t) * 100,
-         cudaMemcpyDeviceToHost)); for (int i = 0; i < 100; i++)
-         {
-             logger.Info("op{}: record[{}] txn[{}] rw[{}] offset[{}]", i, GET_RECORD_ID(ops[i]), GET_TXN_ID(ops[i]),
-                 GET_R_W(ops[i]), GET_OFFSET(ops[i]));
-         }
+    op_t ops[100];
+    gpu_err_check(cudaMemcpy(ops, warehouse_submit_dest.d_submitted_ops, sizeof(op_t) * 100, cudaMemcpyDeviceToHost));
+    for (int i = 0; i < 100; i++)
+    {
+        logger.Info("op{}: record[{}] txn[{}] rw[{}] offset[{}]", i, GET_RECORD_ID(ops[i]), GET_TXN_ID(ops[i]),
+            GET_R_W(ops[i]), GET_OFFSET(ops[i]));
+    }
 #endif
 }
 

@@ -14,8 +14,8 @@ namespace epic::tpcc {
 
 struct TpccTxnMix
 {
-    uint32_t new_order = 100;
-    uint32_t payment = 0;
+    uint32_t new_order = 50;
+    uint32_t payment = 50;
     uint32_t order_status = 0;
     uint32_t delivery = 0;
     uint32_t stock_level = 0;

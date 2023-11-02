@@ -181,17 +181,70 @@ void GpuTableExecutionPlanner::InitializeExecutionPlan()
         return;
     }
 
+#if 0 // DEBUG
+    {
+        constexpr uint32_t max_print = 100;
+        uint32_t num_print = std::min(curr_num_ops, max_print);
+        op_t ops[max_print];
+
+        gpu_err_check(cudaMemcpy(ops, d_submitted_ops, sizeof(op_t) * num_print, cudaMemcpyDeviceToHost));
+        logger.Info("table[{}] num submitted ops {}", name, curr_num_ops);
+
+        for (int i = 0; i < num_print; i++)
+        {
+            logger.Info("table[{}] op{}: record[{}] txn[{}] rw[{}] offset[{}]",
+                name, i, GET_RECORD_ID(ops[i]), GET_TXN_ID(ops[i]), GET_R_W(ops[i]), GET_OFFSET(ops[i]));
+        }
+    }
+#endif
+
     gpu_err_check(cub::DeviceRadixSort::SortKeys(d_scratch_array, scratch_array_bytes,
         static_cast<op_t *>(d_submitted_ops), static_cast<op_t *>(d_sorted_ops), curr_num_ops, 32, sizeof(op_t) * 8,
         std::any_cast<cudaStream_t>(cuda_stream)));
+
+#if 0 // DEBUG
+    {
+        gpu_err_check(cudaStreamSynchronize(std::any_cast<cudaStream_t>(cuda_stream)));
+        constexpr uint32_t max_print = 100;
+        uint32_t num_print = std::min(curr_num_ops, max_print);
+        op_t ops[max_print];
+
+        gpu_err_check(cudaMemcpy(ops, d_sorted_ops, sizeof(op_t) * num_print, cudaMemcpyDeviceToHost));
+        logger.Info("table[{}] num submitted ops {}", name, curr_num_ops);
+
+        for (int i = 0; i < num_print; i++)
+        {
+            logger.Info("table[{}] op{}: record[{}] txn[{}] rw[{}] offset[{}]",
+                name, i, GET_RECORD_ID(ops[i]), GET_TXN_ID(ops[i]), GET_R_W(ops[i]), GET_OFFSET(ops[i]));
+        }
+    }
+#endif
 
     using IsWriteIter = cub::TransformInputIterator<uint32_t, WriteExtractor, op_t *>;
     IsWriteIter w_before_val(static_cast<op_t *>(d_sorted_ops), WriteExtractor());
     gpu_err_check(cub::DeviceScan::ExclusiveSumByKey(d_scratch_array, scratch_array_bytes,
         static_cast<op_t *>(d_sorted_ops), w_before_val, static_cast<uint32_t *>(d_write_ops_before), curr_num_ops,
         SameRow(), std::any_cast<cudaStream_t>(cuda_stream)));
-    IsWriteIter w_after_val(static_cast<op_t *>(d_sorted_ops) + curr_num_ops - 1, WriteExtractor());
 
+#if 0 // DEBUG
+    {
+        gpu_err_check(cudaStreamSynchronize(std::any_cast<cudaStream_t>(cuda_stream)));
+        constexpr uint32_t max_print = 100;
+        uint32_t num_print = std::min(curr_num_ops, max_print);
+        op_t ops[max_print];
+
+        gpu_err_check(cudaMemcpy(ops, d_sorted_ops, sizeof(op_t) * num_print, cudaMemcpyDeviceToHost));
+        logger.Info("table[{}] num submitted ops {}", name, curr_num_ops);
+
+        for (int i = 0; i < num_print; i++)
+        {
+            logger.Info("table[{}] op{}: record[{}] txn[{}] rw[{}] offset[{}] ",
+                        name, i, GET_RECORD_ID(ops[i]), GET_TXN_ID(ops[i]), GET_R_W(ops[i]), GET_OFFSET(ops[i]));
+        }
+    }
+#endif
+
+    IsWriteIter w_after_val(static_cast<op_t *>(d_sorted_ops) + curr_num_ops - 1, WriteExtractor());
     ReverseIterator<uint32_t, IsWriteIter> rev_write_after_val(w_after_val);
     ReverseIterator<op_t, op_t *> rev_sorted_ops(static_cast<op_t *>(d_sorted_ops) + curr_num_ops - 1);
     ReverseIterator<uint32_t, uint32_t *> rev_write_ops_after(

@@ -101,9 +101,32 @@ struct NewOrderExecPlan
     ItemPlan item_plans[TxnType::kMaxItems];
 };
 
-class PaymentTxn
+struct PaymentTxnInput
 {
-    /* TODO: implement payment txn */
+    uint32_t warehouse_id;
+    uint32_t district_id;
+    uint32_t customer_warehouse_id;
+    uint32_t customer_district_id;
+    uint32_t payment_amount;
+    uint32_t customer_id;
+};
+
+struct PaymentTxnParams
+{
+    uint32_t warehouse_id;
+    uint32_t district_id;
+    uint32_t customer_id;
+    uint32_t payment_amount;
+};
+
+struct PaymentTxnExecPlan
+{
+    uint32_t warehouse_read_loc;
+    uint32_t warehouse_write_loc;
+    uint32_t district_read_loc;
+    uint32_t district_write_loc;
+    uint32_t customer_read_loc;
+    uint32_t customer_write_loc;
 };
 
 class OrderStatusTxn
@@ -127,7 +150,7 @@ class StockLevelTxn
 union TpccTxn
 {
     NewOrderTxnInput<FixedSizeTxn> new_order_txn;
-    PaymentTxn payment_txn;
+    PaymentTxnInput payment_txn;
     OrderStatusTxn order_status_txn;
     DeliveryTxn delivery_txn;
     StockLevelTxn stock_level_txn;
@@ -136,17 +159,19 @@ union TpccTxn
 union TpccTxnParam
 {
     NewOrderTxnParams<FixedSizeTxn> new_order_txn;
+    PaymentTxnParams payment_txn;
 } __attribute__((aligned(4)));
 
 union TpccExecPlan
 {
     NewOrderExecPlan<FixedSizeTxn> new_order_txn;
+    PaymentTxnExecPlan payment_txn;
 } __attribute__((aligned(4)));
 
 /* TODO: how to implement piece exection on GPU? */
 void runTransaction(BaseTxn *txn);
 void runTransaction(NewOrderTxnInput<FixedSizeTxn> *txn);
-void runTransaction(PaymentTxn *txn);
+void runTransaction(PaymentTxnInput *txn);
 void runTransaction(OrderStatusTxn *txn);
 void runTransaction(DeliveryTxn *txn);
 } // namespace epic::tpcc

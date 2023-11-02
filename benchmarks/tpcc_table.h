@@ -260,9 +260,11 @@ public:
 
     void indexTxnWrites(BaseTxn *txn, BaseTxn *index, uint32_t epoch_id);
     void indexTxnWrites(NewOrderTxnInput<FixedSizeTxn> *txn, void *index_ptr, uint32_t epoch_id);
+    void indexTxnWrites(PaymentTxnInput *txn, void *index_ptr, uint32_t epoch_id);
 
     void indexTxnReads(BaseTxn *txn, BaseTxn *index, uint32_t epoch_id);
     void indexTxnReads(NewOrderTxnInput<FixedSizeTxn> *txn, void *index_ptr, uint32_t epoch_id);
+    void indexTxnReads(PaymentTxnInput *txn, void *index_ptr, uint32_t epoch_id);
 
     friend class TpccLoader;
 };

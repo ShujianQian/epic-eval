@@ -35,6 +35,9 @@ void TpccIndex::indexTxnWrites(BaseTxn *txn, BaseTxn *index, uint32_t epoch_id)
         indexTxnWrites(reinterpret_cast<NewOrderTxnInput<FixedSizeTxn> *>(txn->data),
             reinterpret_cast<NewOrderTxnParams<FixedSizeTxn> *>(index->data), epoch_id);
         break;
+    case TpccTxnType::PAYMENT:
+        indexTxnWrites(reinterpret_cast<PaymentTxnInput *>(txn->data),
+            reinterpret_cast<PaymentTxnParams *>(index->data), epoch_id);
     default:
         /* TODO: implement write indexing for other txn types */
         break;
@@ -50,6 +53,9 @@ void TpccIndex::indexTxnReads(BaseTxn *txn, BaseTxn *index, uint32_t epoch_id)
         indexTxnReads(reinterpret_cast<NewOrderTxnInput<FixedSizeTxn> *>(txn->data),
             reinterpret_cast<NewOrderTxnParams<FixedSizeTxn> *>(index->data), epoch_id);
         break;
+    case TpccTxnType::PAYMENT:
+        indexTxnReads(reinterpret_cast<PaymentTxnInput *>(txn->data), reinterpret_cast<PaymentTxnParams *>(index->data),
+            epoch_id);
     default:
         /* TODO: implement read indexing for other txn types */
         break;
@@ -95,6 +101,19 @@ void TpccIndex::indexTxnReads(NewOrderTxnInput<FixedSizeTxn> *txn, void *index_p
         index->items[i].item_id = g_item_index->findRow(item_key, 0);
     }
 }
+void TpccIndex::indexTxnWrites(PaymentTxnInput *txn, void *index_ptr, uint32_t epoch_id)
+{
+    auto index = static_cast<PaymentTxnParams *>(index_ptr);
+    WarehouseKey warehouse_key{txn->warehouse_id};
+    index->warehouse_id = g_warehouse_index->findOrInsertRow(warehouse_key, epoch_id);
+    DistrictKey district_key{txn->district_id, txn->warehouse_id};
+    index->district_id = g_district_index->findOrInsertRow(district_key, epoch_id);
+    CustomerKey customer_key{txn->customer_id, txn->customer_district_id, txn->customer_warehouse_id};
+    index->customer_id = g_customer_index->findOrInsertRow(customer_key, epoch_id);
+    index->payment_amount = txn->payment_amount;
+}
+
+void TpccIndex::indexTxnReads(PaymentTxnInput *txn, void *index_ptr, uint32_t epoch_id) {}
 
 void TpccLoader::loadInitialData()
 {

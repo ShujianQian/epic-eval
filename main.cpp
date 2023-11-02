@@ -17,8 +17,8 @@ int main(int argc, char **argv)
 
     epic::tpcc::TpccConfig config;
     config.epochs = 5;
-    config.num_warehouses = 4;
-    //    config.num_txns = 10;
+    config.num_warehouses = 8;
+//        config.num_txns = 100;
 
     epic::tpcc::TpccDb db(config);
     db.loadInitialData();
