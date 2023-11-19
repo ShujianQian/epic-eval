@@ -5,15 +5,15 @@
 #ifndef GPU_EXECUTION_PLANNER_H
 #define GPU_EXECUTION_PLANNER_H
 
+#include <any>
+#include <cstdint>
+#include <string_view>
+
+#include "execution_planner.h"
+#include "allocator.h"
+#include "base_record.h"
+
 #ifdef EPIC_CUDA_AVAILABLE
-
-#    include <any>
-#    include <cstdint>
-#    include <string_view>
-
-#    include "execution_planner.h"
-#    include "allocator.h"
-#    include "base_record.h"
 
 namespace epic {
 
@@ -57,8 +57,7 @@ public:
         , max_num_records(max_num_records)
         , max_num_ops(max_num_txns * max_ops_per_txn)
         , output_txn_array_baseTxn_size(TxnArray<TxnType>::kBaseTxnSize)
-        , d_output_txn_array(txn_array.txns)
-        {};
+        , d_output_txn_array(txn_array.txns){};
     virtual ~GpuTableExecutionPlanner() = default;
     void Initialize() override;
     void SubmitOps(CalcNumOpsFunc pre_submit_ops_func, SubmitOpsFunc submit_ops_func) override;

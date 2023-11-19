@@ -1,0 +1,66 @@
+//
+// Created by Shujian Qian on 2023-11-02.
+//
+
+#ifndef EPIC_GACCO_BENCHMARKS_TPCC_H
+#define EPIC_GACCO_BENCHMARKS_TPCC_H
+
+#include <tpcc_config.h>
+#include <txn.h>
+#include <benchmarks/tpcc_txn.h>
+#include <benchmarks/tpcc_table.h>
+#include <txn_bridge.h>
+#include <gacco/gpu_execution_planner.h>
+#include <gacco/benchmarks/tpcc_submitter.h>
+#include <gacco/benchmarks/tpcc_executor.h>
+
+using epic::TxnBridge;
+
+namespace gacco::tpcc {
+
+using epic::tpcc::TpccConfig;
+using epic::TxnArray;
+using epic::TxnInputArray;
+using epic::tpcc::TpccTxn;
+using epic::tpcc::TpccTxnParam;
+using epic::tpcc::TpccIndex;
+using epic::tpcc::TpccLoader;
+
+class TpccDb
+{
+public:
+    TpccConfig config;
+
+    TxnInputArray<TpccTxn> txn_array;
+    TxnArray<TpccTxnParam> index_output;
+    TxnArray<TpccTxnParam> initialization_input;
+
+    TxnBridge index_initialization_bridge;
+
+    TpccIndex index;
+    TpccLoader loader;
+
+    std::shared_ptr<TableExecutionPlanner> warehouse_planner;
+    std::shared_ptr<TableExecutionPlanner> district_planner;
+    std::shared_ptr<TableExecutionPlanner> customer_planner;
+    std::shared_ptr<TableExecutionPlanner> history_planner;
+    std::shared_ptr<TableExecutionPlanner> new_order_planner;
+    std::shared_ptr<TableExecutionPlanner> order_planner;
+    std::shared_ptr<TableExecutionPlanner> order_line_planner;
+    std::shared_ptr<TableExecutionPlanner> item_planner;
+    std::shared_ptr<TableExecutionPlanner> stock_planner;
+    std::shared_ptr<TpccSubmitter> submitter;
+
+    std::shared_ptr<Executor> executor;
+
+    explicit TpccDb(TpccConfig config);
+    void loadInitialData();
+    void generateTxns();
+    void runBenchmark();
+
+    void indexEpoch(uint32_t epoch_id);
+};
+
+}
+
+#endif // EPIC_GACCO_BENCHMARKS_TPCC_H

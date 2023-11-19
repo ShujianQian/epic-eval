@@ -31,10 +31,13 @@ struct TpccConfig
     size_t epochs = 20;
     size_t num_warehouses = 8;
     size_t order_table_size = 1'000'000;
-    size_t orderline_table_size = 10'000'000;
+    size_t orderline_table_size = 15'000'000;
     DeviceType index_device = DeviceType::CPU;
     DeviceType initialize_device = DeviceType::GPU;
     DeviceType execution_device = DeviceType::GPU;
+    bool gacco_separate_txn_queue = true;
+    bool gacco_use_atomic = false;
+    bool gacco_tpcc_stock_use_atomic = true;
 
     size_t warehouseTableSize() const
     {

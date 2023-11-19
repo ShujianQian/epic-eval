@@ -24,7 +24,12 @@ set(EPIC_CPU_SOURCE
         benchmarks/tpcc_txn.cpp
         benchmarks/tpcc.cpp
         benchmarks/tpcc_index.cpp
+        benchmarks/tpcc_txn_gen.cpp
         txn_bridge.cpp)
+
+set(GACCO_CPU_SOURCE
+        gacco/benchmarks/tpcc.cpp
+        gacco/benchmarks/tpcc_txn_gen.cpp)
 
 set(EPIC_GPU_SOURCE
         gpu_src/epic_gpu.cu gpu_src/gpu_allocator.cu
@@ -37,14 +42,22 @@ set(EPIC_GPU_SOURCE
         gpu_configuration.cu
         benchmarks/tpcc_gpu_executor.cu)
 
+set(GACCO_GPU_SOURCE
+    gacco/gpu_execution_planner.cu
+        gacco/benchmarks/tpcc_gpu_submitter.cu
+        gacco/benchmarks/tpcc_gpu_executor.cu)
+
 if (CUDA_FOUND)
-    set(EPIC_SOURCE ${EPIC_CPU_SOURCE} ${EPIC_GPU_SOURCE})
+    set(EPIC_SOURCE ${EPIC_CPU_SOURCE} ${EPIC_GPU_SOURCE} ${GACCO_CPU_SOURCE} ${GACCO_GPU_SOURCE})
 else ()
-    set(EPIC_SOURCE ${EPIC_CPU_SOURCE})
+    set(EPIC_SOURCE ${EPIC_CPU_SOURCE} ${GACCO_CPU_SOURCE})
 endif ()
 
 include_directories(${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/gpu_src ${CMAKE_SOURCE_DIR}/third_party/spdlog/include)
 add_library(epic STATIC ${EPIC_SOURCE})
+if (CUDA_FOUND)
+    set_property(TARGET epic PROPERTY CUDA_ARCHITECTURES 86)
+endif ()
 
 add_executable(epic_driver main.cpp)
 target_link_libraries(epic_driver epic)

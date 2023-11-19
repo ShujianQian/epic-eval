@@ -31,6 +31,7 @@ __device__ __forceinline__ void gpuExecTpccTxn(TpccRecords records, TpccVersions
 {
     constexpr uint32_t leader_lane = 0;
     constexpr uint32_t all_lanes_mask = 0xffffffffu;
+    constexpr uint32_t s_quantity_offset = offsetof(StockValue, s_quantity) / sizeof(uint32_t);
 
 #if 0 // DEBUG
     if (lane_id == leader_lane)
@@ -66,10 +67,13 @@ __device__ __forceinline__ void gpuExecTpccTxn(TpccRecords records, TpccVersions
     {
         gpuReadFromTableCoop(records.item_record, versions.item_version, params->items[i].item_id,
             plan->item_plans[i].item_loc, epoch, result, lane_id);
-        //        gpuReadFromTableCoop(records.stock_record, versions.stock_version, params->items[i].stock_id,
-        //                             loc_record_a, epoch, result, lane_id);
         gpuReadFromTableCoop(records.stock_record, versions.stock_version, params->items[i].stock_id,
             plan->item_plans[i].stock_read_loc, epoch, result, lane_id);
+        if (lane_id == s_quantity_offset)
+        {
+            uint32_t order_quantity = params->items[i].order_quantities;
+            result = result > order_quantity + 10 ? result - order_quantity : result +91 - order_quantity;
+        }
         gpuWriteToTableCoop(records.stock_record, versions.stock_version, params->items[i].stock_id,
             plan->item_plans[i].stock_write_loc, epoch, result, lane_id);
         gpuWriteToTableCoop(records.order_line_record, versions.order_line_version, params->items[i].order_line_id,
@@ -82,6 +86,11 @@ __device__ __forceinline__ void gpuExecTpccTxn(TpccRecords records, TpccVersions
 {
     constexpr uint32_t leader_lane = 0;
     constexpr uint32_t all_lanes_mask = 0xffffffffu;
+    constexpr uint32_t w_ytd_offset = offsetof(WarehouseValue, w_ytd) / sizeof(uint32_t);
+    constexpr uint32_t d_ytd_offset = offsetof(DistrictValue, d_ytd) / sizeof(uint32_t);
+    constexpr uint32_t c_balance_offset = offsetof(CustomerValue, c_balance) / sizeof(uint32_t);
+    constexpr uint32_t c_ytd_payment_offset = offsetof(CustomerValue, c_ytd_payment) / sizeof(uint32_t);
+    constexpr uint32_t c_payment_cnt_offset = offsetof(CustomerValue, c_payment_cnt) / sizeof(uint32_t);
 
 #if 0 // DEBUG
     {
@@ -98,16 +107,40 @@ __device__ __forceinline__ void gpuExecTpccTxn(TpccRecords records, TpccVersions
 #endif
 
     uint32_t result;
+    uint32_t payment_amount = params->payment_amount;
+
     gpuReadFromTableCoop(records.warehouse_record, versions.warehouse_version, params->warehouse_id,
         plan->warehouse_read_loc, epoch, result, lane_id);
+    if (lane_id == w_ytd_offset)
+    {
+        result += payment_amount;
+    }
     gpuWriteToTableCoop(records.warehouse_record, versions.warehouse_version, params->warehouse_id,
         plan->warehouse_write_loc, epoch, result, lane_id);
+
     gpuReadFromTableCoop(records.district_record, versions.district_version, params->district_id,
         plan->district_read_loc, epoch, result, lane_id);
+    if (lane_id == d_ytd_offset)
+    {
+        result += payment_amount;
+    }
     gpuWriteToTableCoop(records.district_record, versions.district_version, params->district_id,
         plan->district_write_loc, epoch, result, lane_id);
+
     gpuReadFromTableCoop(records.customer_record, versions.customer_version, params->customer_id,
         plan->customer_read_loc, epoch, result, lane_id);
+    if (lane_id == c_balance_offset)
+    {
+        result -= payment_amount;
+    }
+    if (lane_id == c_ytd_payment_offset)
+    {
+        result += payment_amount;
+    }
+    if (lane_id == c_payment_cnt_offset)
+    {
+        result += 1;
+    }
     gpuWriteToTableCoop(records.customer_record, versions.customer_version, params->customer_id,
         plan->customer_write_loc, epoch, result, lane_id);
 }

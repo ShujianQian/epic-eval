@@ -35,9 +35,17 @@ union WarehouseKey
 
 struct WarehouseValue
 {
-    /* TODO: implement WarehouseValue */
     uint32_t placeholder;
+    uint32_t w_ytd;
+    uint32_t w_tax;
+    uint8_t w_name[12];
+    uint8_t w_street_1[20];
+    uint8_t w_street_2[20];
+    uint8_t w_city[20];
+    uint8_t w_state[4];
+    uint8_t w_zip[12];
 };
+static_assert(sizeof(WarehouseValue) <= 128);
 
 union DistrictKey
 {
@@ -58,9 +66,17 @@ union DistrictKey
 
 struct DistrictValue
 {
-    /* TODO: implement DistrictValue */
-    uint32_t placeholder;
+    uint32_t d_ytd;
+    uint32_t d_tax;
+    // uint32_t d_next_o_id; /* not used */
+    uint8_t d_name[12];
+    uint8_t d_street_1[20];
+    uint8_t d_street_2[20];
+    uint8_t d_city[20];
+    uint8_t d_state[4];
+    uint8_t d_zip[12];
 };
+static_assert(sizeof(DistrictValue) <= 128);
 
 union CustomerKey
 {
@@ -83,8 +99,29 @@ union CustomerKey
 
 struct CustomerValue
 {
-    /* TODO: implement CustomerValue */
-    uint32_t placeholder;
+    uint32_t c_balance;
+    uint32_t c_ytd_payment;
+    uint32_t c_payment_cnt;
+    uint32_t c_delivery_cnt;
+    uint32_t c_discount;
+    uint32_t c_credit_lim;
+    uint8_t c_credit[4];
+};
+static_assert(sizeof(CustomerValue) <= 128);
+
+struct CustomerInfoValue
+{
+    uint8_t c_last[16];
+    uint8_t c_first[16];
+    uint8_t c_street_1[20];
+    uint8_t c_street_2[20];
+    uint8_t c_city[20];
+    uint8_t c_state[4];
+    uint8_t c_zip[12];
+    uint8_t c_phone[16];
+    uint32_t c_since;
+    uint8_t c_middle[2];
+    uint8_t c_data[500];
 };
 
 union HistoryKey
@@ -114,9 +151,10 @@ union HistoryKey
 
 struct HistoryValue
 {
-    /* TODO: implement HistoryValue */
-    uint32_t placeholder;
+    uint32_t h_amount;
+    uint8_t h_data[24];
 };
+static_assert(sizeof(HistoryValue) <= 128);
 
 union NewOrderKey
 {
@@ -139,8 +177,7 @@ union NewOrderKey
 
 struct NewOrderValue
 {
-    /* TODO: implement NewOrderValue */
-    uint32_t placeholder;
+    uint32_t dummy;
 };
 
 union OrderKey
@@ -164,10 +201,13 @@ union OrderKey
 
 struct OrderValue
 {
-    /* TODO: implement OrderValue */
     uint32_t o_c_id;
-    uint32_t placeholder;
+    uint32_t o_carrier_id;
+    uint32_t o_ol_cnt;
+    uint32_t o_all_local;
+    uint32_t o_entry_d;
 };
+static_assert(sizeof(OrderValue) <= 128);
 
 union OrderLineKey
 {
@@ -192,9 +232,13 @@ union OrderLineKey
 
 struct OrderLineValue
 {
-    /* TODO: implement OrderLineValue */
-    uint32_t placeholder;
+    uint32_t ol_i_id;
+    uint32_t ol_delivery_d;
+    uint32_t ol_amount;
+    uint32_t ol_supply_w_id;
+    uint32_t ol_quantity;
 };
+static_assert(sizeof(OrderLineValue) <= 128);
 
 union ItemKey
 {
@@ -214,8 +258,12 @@ union ItemKey
 struct ItemValue
 {
     /* TODO: implement ItemValue */
-    uint32_t placeholder;
+    uint8_t i_name[24];
+    uint32_t i_price;
+    uint8_t i_data[52];
+    uint32_t i_im_id;
 };
+static_assert(sizeof(ItemValue) <= 128);
 
 union StockKey
 {
@@ -236,8 +284,17 @@ union StockKey
 
 struct StockValue
 {
-    /* TODO: implement StockValue */
-    uint32_t placeholder;
+    uint32_t s_quantity;
+    uint32_t s_ytd;
+    uint32_t s_order_cnt;
+    uint32_t s_remote_cnt;
+};
+static_assert(sizeof(StockValue) <= 128);
+
+struct StockDataValue
+{
+    uint8_t s_data[52];
+    uint8_t s_dist[10][24];
 };
 
 class TpccIndex

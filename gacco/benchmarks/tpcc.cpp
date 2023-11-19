@@ -1,69 +1,52 @@
 //
-// Created by Shujian Qian on 2023-09-15.
+// Created by Shujian Qian on 2023-11-02.
 //
+#include <gacco/benchmarks/tpcc.h>
 
-#include "benchmarks/tpcc.h"
+#include <memory>
 
-#include <cassert>
-#include <random>
-#include <cstdio>
-#include <chrono>
+#include <gacco/gpu_execution_planner.h>
+#include <gacco/benchmarks/tpcc_txn_gen.h>
+#include <util_log.h>
+#include <util_gpu_transfer.h>
+#include <gpu_allocator.h>
+#include <gacco/benchmarks/tpcc_gpu_submitter.h>
+#include <gacco/benchmarks/tpcc_gpu_executor.h>
+#include <gacco/benchmarks/tpcc_storage.h>
 
-#include "benchmarks/tpcc_txn.h"
+namespace gacco::tpcc {
 
-#include "util_log.h"
-#include "util_device_type.h"
-#include "gpu_txn.h"
-#include "gpu_allocator.h"
-#include "gpu_execution_planner.h"
-#include "benchmarks/tpcc_gpu_submitter.h"
-#include "benchmarks/tpcc_executor.h"
-#include "benchmarks/tpcc_gpu_executor.h"
-#include <benchmarks/tpcc_txn_gen.h>
-
-namespace epic::tpcc {
-TpccTxnMix::TpccTxnMix(
-    uint32_t new_order, uint32_t payment, uint32_t order_status, uint32_t delivery, uint32_t stock_level)
-    : new_order(new_order)
-    , payment(payment)
-    , order_status(order_status)
-    , delivery(delivery)
-    , stock_level(stock_level)
-{
-    assert(new_order + payment + order_status + delivery + stock_level == 100);
-}
+using epic::BaseTxn;
 
 TpccDb::TpccDb(TpccConfig config)
     : config(config)
     , index(this->config)
+    , loader(this->config, index)
     , txn_array(config.num_txns, config.epochs)
     , index_output(config.num_txns, config.index_device)
     , initialization_input(config.num_txns, config.initialize_device, false)
-    , initialization_output(config.num_txns, config.initialize_device)
-    , loader(this->config, index)
 {
     index_initialization_bridge.Link(index_output, initialization_input);
-    if (config.initialize_device == DeviceType::GPU)
+    if (config.initialize_device == epic::DeviceType::GPU)
     {
-        GpuAllocator allocator;
-        warehouse_planner = std::make_unique<GpuTableExecutionPlanner>(
-            "warehouse", allocator, 0, 2, config.num_txns, config.num_warehouses, initialization_output);
-        district_planner = std::make_unique<GpuTableExecutionPlanner>(
-            "district", allocator, 0, 2, config.num_txns, config.num_warehouses * 10, initialization_output);
-        customer_planner = std::make_unique<GpuTableExecutionPlanner>(
-            "customer", allocator, 0, 2, config.num_txns, config.num_warehouses * 10 * 3000, initialization_output);
-        history_planner = std::make_unique<GpuTableExecutionPlanner>(
-            "history", allocator, 0, 1, config.num_txns, config.num_warehouses * 10 * 3000, initialization_output);
-        new_order_planner = std::make_unique<GpuTableExecutionPlanner>(
-            "new_order", allocator, 0, 1, config.num_txns, config.num_warehouses * 10 * 900, initialization_output);
-        order_planner = std::make_unique<GpuTableExecutionPlanner>(
-            "order", allocator, 0, 1, config.num_txns, config.num_warehouses * 10 * 3000, initialization_output);
-        order_line_planner = std::make_unique<GpuTableExecutionPlanner>("order_line", allocator, 0, 15, config.num_txns,
-            config.num_warehouses * 10 * 3000 * 15, initialization_output);
-        item_planner = std::make_unique<GpuTableExecutionPlanner>(
-            "item", allocator, 0, 15, config.num_txns, 100'000, initialization_output);
-        stock_planner = std::make_unique<GpuTableExecutionPlanner>(
-            "stock", allocator, 0, 15 * 2, config.num_txns, 100'000 * config.num_warehouses, initialization_output);
+        epic::GpuAllocator allocator;
+        warehouse_planner = std::make_shared<GpuTableExecutionPlanner>(
+            "warehouse", allocator, 0, 2, config.num_txns, config.num_warehouses);
+        district_planner = std::make_shared<GpuTableExecutionPlanner>(
+            "district", allocator, 0, 2, config.num_txns, config.num_warehouses * 10);
+        customer_planner = std::make_shared<GpuTableExecutionPlanner>(
+            "customer", allocator, 0, 2, config.num_txns, config.num_warehouses * 10 * 3000);
+        history_planner = std::make_shared<GpuTableExecutionPlanner>(
+            "history", allocator, 0, 1, config.num_txns, config.num_warehouses * 10 * 3000);
+        new_order_planner = std::make_shared<GpuTableExecutionPlanner>(
+            "new_order", allocator, 0, 1, config.num_txns, config.order_table_size);
+        order_planner = std::make_shared<GpuTableExecutionPlanner>(
+            "order", allocator, 0, 1, config.num_txns, config.order_table_size);
+        order_line_planner = std::make_shared<GpuTableExecutionPlanner>(
+            "order_line", allocator, 0, 15, config.num_txns, config.orderline_table_size);
+        item_planner = std::make_shared<GpuTableExecutionPlanner>("item", allocator, 0, 15, config.num_txns, 100'000);
+        stock_planner = std::make_shared<GpuTableExecutionPlanner>(
+            "stock", allocator, 0, 15 * 2, config.num_txns, 100'000 * config.num_warehouses);
 
         warehouse_planner->Initialize();
         district_planner->Initialize();
@@ -103,113 +86,54 @@ TpccDb::TpccDb(TpccConfig config)
                 item_planner->curr_num_ops},
             TpccSubmitter::TableSubmitDest{stock_planner->d_num_ops, stock_planner->d_op_offsets,
                 stock_planner->d_submitted_ops, stock_planner->d_scratch_array, stock_planner->scratch_array_bytes,
-                stock_planner->curr_num_ops});
+                stock_planner->curr_num_ops},
+            config);
     }
     else
     {
-        auto &logger = Logger::GetInstance();
-        logger.Error("Unsupported initialize device");
+        auto &logger = epic::Logger::GetInstance();
+        logger.Error("Unsupported initialization device type");
         exit(-1);
     }
 
-    if (config.execution_device == DeviceType::GPU)
+    if (config.execution_device == epic::DeviceType::GPU)
     {
-        /* TODO: initialize records & versions */
-        auto &logger = Logger::GetInstance();
-        logger.Info("Allocating records and versions");
-
-        GpuAllocator allocator;
-
-        /* CAUTION: version size is based on the number of transactions, and will cause sync issue if too small */
-        size_t warehouse_rec_size = sizeof(Record<WarehouseValue>) * config.warehouseTableSize();
-        size_t warehouse_ver_size = sizeof(Version<WarehouseValue>) * config.num_txns;
-        logger.Info("Warehouse record: {}, version: {}", formatSizeBytes(warehouse_rec_size),
-            formatSizeBytes(warehouse_ver_size));
-        records.warehouse_record = static_cast<Record<WarehouseValue> *>(allocator.Allocate(warehouse_rec_size));
-        versions.warehouse_version = static_cast<Version<WarehouseValue> *>(allocator.Allocate(warehouse_ver_size));
-
-        size_t district_rec_size = sizeof(Record<DistrictValue>) * config.districtTableSize();
-        size_t district_ver_size = sizeof(Version<DistrictValue>) * config.num_txns;
-        logger.Info(
-            "District record: {}, version: {}", formatSizeBytes(district_rec_size), formatSizeBytes(district_ver_size));
-        records.district_record = static_cast<Record<DistrictValue> *>(allocator.Allocate(district_rec_size));
-        versions.district_version = static_cast<Version<DistrictValue> *>(allocator.Allocate(district_ver_size));
-
-        size_t customer_rec_size = sizeof(Record<CustomerValue>) * config.customerTableSize();
-        size_t customer_ver_size = sizeof(Version<CustomerValue>) * config.num_txns;
-        logger.Info(
-            "Customer record: {}, version: {}", formatSizeBytes(customer_rec_size), formatSizeBytes(customer_ver_size));
-        records.customer_record = static_cast<Record<CustomerValue> *>(allocator.Allocate(customer_rec_size));
-        versions.customer_version = static_cast<Version<CustomerValue> *>(allocator.Allocate(customer_ver_size));
-
+        TpccRecords records;
+        epic::GpuAllocator allocator;
+        records.warehouse_record =
+            static_cast<WarehouseValue *>(allocator.Allocate(sizeof(WarehouseValue) * config.warehouseTableSize()));
+        records.district_record =
+            static_cast<DistrictValue *>(allocator.Allocate(sizeof(DistrictValue) * config.districtTableSize()));
+        records.customer_record =
+            static_cast<CustomerValue *>(allocator.Allocate(sizeof(CustomerValue) * config.customerTableSize()));
         /* TODO: history table is too big */
-        //        size_t history_rec_size = sizeof(Record<HistoryValue>) * config.historyTableSize();
-        //        size_t history_ver_size = sizeof(Version<HistoryValue>) * config.historyTableSize();
-        //        logger.Info("History record: {}, version: {}", formatSizeBytes(history_rec_size),
-        //                    formatSizeBytes(history_ver_size));
-        //        records.history_record = static_cast<Record<HistoryValue> *>(allocator.Allocate(history_rec_size));
-        //        versions.history_version = static_cast<Version<HistoryValue> *>(allocator.Allocate(history_ver_size));
-
-        size_t new_order_rec_size = sizeof(Record<NewOrderValue>) * config.newOrderTableSize();
-        size_t new_order_ver_size = sizeof(Version<NewOrderValue>) * config.num_txns; /* TODO: not needed */
-        logger.Info("NewOrder record: {}, version: {}", formatSizeBytes(new_order_rec_size),
-            formatSizeBytes(new_order_ver_size));
-        records.new_order_record = static_cast<Record<NewOrderValue> *>(allocator.Allocate(new_order_rec_size));
-        versions.new_order_version = static_cast<Version<NewOrderValue> *>(allocator.Allocate(new_order_ver_size));
-
-        size_t order_rec_size = sizeof(Record<OrderValue>) * config.orderTableSize();
-        size_t order_ver_size = sizeof(Version<OrderValue>) * config.num_txns; /* TODO: not needed */
-        logger.Info("Order record: {}, version: {}", formatSizeBytes(order_rec_size), formatSizeBytes(order_ver_size));
-        records.order_record = static_cast<Record<OrderValue> *>(allocator.Allocate(order_rec_size));
-        versions.order_version = static_cast<Version<OrderValue> *>(allocator.Allocate(order_ver_size));
-
-        size_t order_line_rec_size = sizeof(Record<OrderLineValue>) * config.orderLineTableSize();
-        size_t order_line_ver_size = sizeof(Version<OrderLineValue>) * config.num_txns * 15; /* TODO: not needed */
-        logger.Info("OrderLine record: {}, version: {}", formatSizeBytes(order_line_rec_size),
-            formatSizeBytes(order_line_ver_size));
-        records.order_line_record = static_cast<Record<OrderLineValue> *>(allocator.Allocate(order_line_rec_size));
-        versions.order_line_version = static_cast<Version<OrderLineValue> *>(allocator.Allocate(order_line_ver_size));
-
-        size_t item_rec_size = sizeof(Record<ItemValue>) * config.itemTableSize();
-        size_t item_ver_size = sizeof(Version<ItemValue>) * config.num_txns * 15; /* TODO: not needed */
-        logger.Info("Item record: {}, version: {}", formatSizeBytes(item_rec_size), formatSizeBytes(item_ver_size));
-        records.item_record = static_cast<Record<ItemValue> *>(allocator.Allocate(item_rec_size));
-        versions.item_version = static_cast<Version<ItemValue> *>(allocator.Allocate(item_ver_size));
-
-        size_t stock_rec_size = sizeof(Record<StockValue>) * config.stockTableSize();
-        size_t stock_ver_size = sizeof(Version<StockValue>) * config.num_txns * 15;
-        logger.Info("Stock record: {}, version: {}", formatSizeBytes(stock_rec_size), formatSizeBytes(stock_ver_size));
-        records.stock_record = static_cast<Record<StockValue> *>(allocator.Allocate(stock_rec_size));
-        versions.stock_version = static_cast<Version<StockValue> *>(allocator.Allocate(stock_ver_size));
+        //        records.history_record =
+        //                static_cast<HistoryValue *>(allocator.Allocate(sizeof(HistoryValue) *
+        //                config.historyTableSize()));
+        records.new_order_record =
+            static_cast<NewOrderValue *>(allocator.Allocate(sizeof(NewOrderValue) * config.newOrderTableSize()));
+        records.order_record =
+            static_cast<OrderValue *>(allocator.Allocate(sizeof(OrderValue) * config.orderTableSize()));
+        records.order_line_record =
+            static_cast<OrderLineValue *>(allocator.Allocate(sizeof(OrderLineValue) * config.orderLineTableSize()));
+        records.item_record = static_cast<ItemValue *>(allocator.Allocate(sizeof(ItemValue) * config.itemTableSize()));
+        records.stock_record =
+            static_cast<StockValue *>(allocator.Allocate(sizeof(StockValue) * config.stockTableSize()));
 
         allocator.PrintMemoryInfo();
 
-        /* TODO: execution input need to be transferred too, currently using placeholders */
-        executor =
-            std::make_shared<GpuExecutor>(records, versions, initialization_input, initialization_output, config);
+        executor = std::make_shared<GpuExecutor>(records,
+            Executor::TpccTableLocks{warehouse_planner->table_lock, district_planner->table_lock,
+                customer_planner->table_lock, history_planner->table_lock, new_order_planner->table_lock,
+                order_planner->table_lock, order_line_planner->table_lock, item_planner->table_lock,
+                stock_planner->table_lock},
+            initialization_input, config);
     }
     else
     {
-        auto &logger = Logger::GetInstance();
+        auto &logger = epic::Logger::GetInstance();
         logger.Error("Unsupported initialize device");
         exit(-1);
-    }
-}
-
-void TpccDb::generateTxns()
-{
-    auto &logger = Logger::GetInstance();
-
-    TpccTxnGenerator generator(config);
-    for (size_t epoch = 0; epoch < config.epochs; ++epoch)
-    {
-        logger.Info("Generating epoch {}", epoch);
-        for (size_t i = 0; i < config.num_txns; ++i)
-        {
-            BaseTxn *txn = txn_array.getTxn(epoch, i);
-            uint32_t timestamp = epoch * config.num_txns + i;
-            generator.generateTxn(txn, timestamp);
-        }
     }
 }
 
@@ -218,9 +142,47 @@ void TpccDb::loadInitialData()
     loader.loadInitialData();
 }
 
+void TpccDb::generateTxns()
+{
+    auto &logger = epic::Logger::GetInstance();
+    logger.Info("Generating {} txns with mix {} {} {} {} {}", config.num_txns * config.epochs, config.txn_mix.new_order,
+        config.txn_mix.payment, config.txn_mix.order_status, config.txn_mix.delivery, config.txn_mix.stock_level);
+    TpccTxnGenerator generator(config);
+    for (size_t epoch = 0; epoch < config.epochs; ++epoch)
+    {
+        logger.Info("Generating epoch {}", epoch);
+        for (size_t i = 0; i < config.num_txns; ++i)
+        {
+            BaseTxn *txn = txn_array.getTxn(epoch, i);
+            uint32_t timestamp = epoch * config.num_txns + i;
+            generator.generateTxn(txn, i, timestamp);
+        }
+    }
+}
+
+void TpccDb::indexEpoch(uint32_t epoch_id)
+{
+    /* zero-indexed */
+    uint32_t index_epoch_id = epoch_id - 1;
+
+    /* it's important to index writes before reads */
+    for (uint32_t i = 0; i < config.num_txns; ++i)
+    {
+        BaseTxn *txn = txn_array.getTxn(index_epoch_id, i);
+        BaseTxn *txn_param = index_output.getTxn(i);
+        index.indexTxnWrites(txn, txn_param, index_epoch_id);
+    }
+    for (uint32_t i = 0; i < config.num_txns; ++i)
+    {
+        BaseTxn *txn = txn_array.getTxn(index_epoch_id, i);
+        BaseTxn *txn_param = index_output.getTxn(i);
+        index.indexTxnReads(txn, txn_param, index_epoch_id);
+    }
+}
+
 void TpccDb::runBenchmark()
 {
-    auto &logger = Logger::GetInstance();
+    auto &logger = epic::Logger::GetInstance();
     std::chrono::high_resolution_clock::time_point start_time, end_time;
     for (uint32_t epoch_id = 1; epoch_id <= config.epochs; ++epoch_id)
     {
@@ -232,6 +194,36 @@ void TpccDb::runBenchmark()
             end_time = std::chrono::high_resolution_clock::now();
             logger.Info("Epoch {} indexing time: {} us", epoch_id,
                 std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count());
+
+#if 0 // DEBUG
+            {
+                constexpr size_t max_print_size = 100u;
+                constexpr size_t base_txn_size = TxnArray<TpccTxnParam>::kBaseTxnSize;
+                uint32_t print_size = std::min(config.num_txns, max_print_size);
+                for (int i = 0; i < print_size; ++i)
+                {
+                    uint8_t *txn_params = reinterpret_cast<uint8_t *>(index_output.txns);
+                    auto param = &reinterpret_cast<TpccTxnParam *>(
+                        reinterpret_cast<BaseTxn *>(txn_params + i * base_txn_size)->data)
+                        ->new_order_txn;
+                    uint32_t type = reinterpret_cast<BaseTxn *>(txn_params + i * base_txn_size)->txn_type;
+                    logger.Info("txn {} type[{}] warehouse[{}] district[{}] customer[{}] order[{}] new_order[{}] numitems[{}] "
+                                "item1[{}] stock_read1[{}] order_line1[{}] quantity1[{}] "
+                                "item2[{}] stock_read2[{}] order_line2[{}] quantity2[{}] "
+                                "item3[{}] stock_read3[{}] order_line3[{}] quantity3[{}] "
+                                "item4[{}] stock_read4[{}] order_line4[{}] quantity4[{}] "
+                                "item5[{}] stock_read5[{}] order_line5[{}] quantity5[{}] ",
+                                i, type, param->warehouse_id, param->district_id, param->customer_id, param->order_id,
+                                param->new_order_id, param->num_items, param->items[0].item_id, param->items[0].stock_id,
+                                param->items[0].order_line_id, param->items[0].order_quantities, param->items[1].item_id,
+                                param->items[1].stock_id, param->items[1].order_line_id, param->items[1].order_quantities,
+                                param->items[2].item_id, param->items[2].stock_id, param->items[2].order_line_id,
+                                param->items[2].order_quantities, param->items[3].item_id, param->items[3].stock_id,
+                                param->items[3].order_line_id, param->items[3].order_quantities, param->items[4].item_id,
+                                param->items[4].stock_id, param->items[4].order_line_id, param->items[4].order_quantities);
+                }
+            }
+#endif
         }
 
         /* transfer */
@@ -251,19 +243,20 @@ void TpccDb::runBenchmark()
                 uint32_t copy_size = print_size * base_txn_size;
                 uint8_t txn_params[max_print_size * base_txn_size];
 
-                transferGpuToCpu(txn_params, initialization_input.txns, copy_size);
+                epic::transferGpuToCpu(txn_params, initialization_input.txns, copy_size);
                 for (int i = 0; i < print_size; ++i)
                 {
                     auto param = &reinterpret_cast<TpccTxnParam *>(
                         reinterpret_cast<BaseTxn *>(txn_params + i * base_txn_size)->data)
                         ->new_order_txn;
-                    logger.Info("txn {} warehouse[{}] district[{}] customer[{}] order[{}] new_order[{}] numitems[{}] "
+                    uint32_t type = reinterpret_cast<BaseTxn *>(txn_params + i * base_txn_size)->txn_type;
+                    logger.Info("txn {} type[{}] warehouse[{}] district[{}] customer[{}] order[{}] new_order[{}] numitems[{}] "
                                 "item1[{}] stock_read1[{}] order_line1[{}] quantity1[{}] "
                                 "item2[{}] stock_read2[{}] order_line2[{}] quantity2[{}] "
                                 "item3[{}] stock_read3[{}] order_line3[{}] quantity3[{}] "
                                 "item4[{}] stock_read4[{}] order_line4[{}] quantity4[{}] "
                                 "item5[{}] stock_read5[{}] order_line5[{}] quantity5[{}] ",
-                                i, param->warehouse_id, param->district_id, param->customer_id, param->order_id,
+                                i, type, param->warehouse_id, param->district_id, param->customer_id, param->order_id,
                                 param->new_order_id, param->num_items, param->items[0].item_id, param->items[0].stock_id,
                                 param->items[0].order_line_id, param->items[0].order_quantities, param->items[1].item_id,
                                 param->items[1].stock_id, param->items[1].order_line_id, param->items[1].order_quantities,
@@ -272,7 +265,6 @@ void TpccDb::runBenchmark()
                                 param->items[3].order_line_id, param->items[3].order_quantities, param->items[4].item_id,
                                 param->items[4].stock_id, param->items[4].order_line_id, param->items[4].order_quantities);
                 }
-                logger.flush();
             }
 #endif
         }
@@ -378,38 +370,6 @@ void TpccDb::runBenchmark()
 
         /* execution */
         {
-#if 0 // DEBUG
-            {
-                constexpr size_t max_print_size = 100u;
-                constexpr size_t base_txn_size = TxnArray<TpccTxnParam>::kBaseTxnSize;
-                uint32_t print_size = std::min(config.num_txns, max_print_size);
-                uint32_t copy_size = print_size * base_txn_size;
-                uint8_t txn_params[max_print_size * base_txn_size];
-
-                transferGpuToCpu(txn_params, initialization_input.txns, copy_size);
-                for (int i = 0; i < print_size; ++i)
-                {
-                    auto param = &reinterpret_cast<TpccTxnParam *>(
-                        reinterpret_cast<BaseTxn *>(txn_params + i * base_txn_size)->data)
-                                      ->new_order_txn;
-                    logger.Info("txn {} warehouse[{}] district[{}] customer[{}] order[{}] new_order[{}] numitems[{}] "
-                                "item1[{}] stock_read1[{}] order_line1[{}] quantity1[{}] "
-                                "item2[{}] stock_read2[{}] order_line2[{}] quantity2[{}] "
-                                "item3[{}] stock_read3[{}] order_line3[{}] quantity3[{}] "
-                                "item4[{}] stock_read4[{}] order_line4[{}] quantity4[{}] "
-                                "item5[{}] stock_read5[{}] order_line5[{}] quantity5[{}] ",
-                        i, param->warehouse_id, param->district_id, param->customer_id, param->order_id,
-                        param->new_order_id, param->num_items, param->items[0].item_id, param->items[0].stock_id,
-                        param->items[0].order_line_id, param->items[0].order_quantities, param->items[1].item_id,
-                        param->items[1].stock_id, param->items[1].order_line_id, param->items[1].order_quantities,
-                        param->items[2].item_id, param->items[2].stock_id, param->items[2].order_line_id,
-                        param->items[2].order_quantities, param->items[3].item_id, param->items[3].stock_id,
-                        param->items[3].order_line_id, param->items[3].order_quantities, param->items[4].item_id,
-                        param->items[4].stock_id, param->items[4].order_line_id, param->items[4].order_quantities);
-                }
-                logger.flush();
-            }
-#endif
             start_time = std::chrono::high_resolution_clock::now();
 
             executor->execute(epoch_id);
@@ -420,23 +380,5 @@ void TpccDb::runBenchmark()
         }
     }
 }
-void TpccDb::indexEpoch(uint32_t epoch_id)
-{
-    /* zero-indexed */
-    uint32_t index_epoch_id = epoch_id - 1;
 
-    /* it's important to index writes before reads */
-    for (uint32_t i = 0; i < config.num_txns; ++i)
-    {
-        BaseTxn *txn = txn_array.getTxn(index_epoch_id, i);
-        BaseTxn *txn_param = index_output.getTxn(i);
-        index.indexTxnWrites(txn, txn_param, index_epoch_id);
-    }
-    for (uint32_t i = 0; i < config.num_txns; ++i)
-    {
-        BaseTxn *txn = txn_array.getTxn(index_epoch_id, i);
-        BaseTxn *txn_param = index_output.getTxn(i);
-        index.indexTxnReads(txn, txn_param, index_epoch_id);
-    }
-}
-} // namespace epic::tpcc
+} // namespace gacco::tpcc

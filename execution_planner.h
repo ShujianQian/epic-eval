@@ -26,17 +26,17 @@ using op_t = uint64_t;
 using CalcNumOpsFunc = uint32_t (*)(BaseTxn *txn);
 using SubmitOpsFunc = void (*)(BaseTxn *txn, op_t *ops);
 
-constexpr op_t record_id_mask = 0xFFFFFFFF00000000;
+constexpr op_t record_id_mask = 0xFFFFFFFF00000000ull;
 constexpr op_t record_id_shift = 32;
-constexpr op_t txn_id_mask = 0x00000000FFFFF000;
+constexpr op_t txn_id_mask = 0x00000000FFFFF000ull;
 constexpr op_t txn_id_shift = 12;
-constexpr op_t r_w_mask = 0x0000000000000F00;
+constexpr op_t r_w_mask = 0x0000000000000F00ull;
 constexpr op_t r_w_shift = 8;
-constexpr op_t offset_mask = 0x00000000000000FF;
+constexpr op_t offset_mask = 0x00000000000000FFull;
 constexpr op_t offset_shift = 0;
 
-constexpr op_t read_op = 0x0;
-constexpr op_t write_op = 0x1;
+constexpr op_t read_op = 0x0ull;
+constexpr op_t write_op = 0x1ull;
 
 #define CREATE_OP(record_id, txn_id, r_w, offset) \
     (((op_t)(record_id) << record_id_shift) | ((op_t)(txn_id) << txn_id_shift) | ((op_t)(r_w) << r_w_shift) | ((op_t)(offset) << offset_shift));
