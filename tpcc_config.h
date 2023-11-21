@@ -45,27 +45,29 @@ struct TpccConfig
     }
     size_t districtTableSize() const
     {
-        return num_warehouses * 2 * 20;
+        return num_warehouses * 2 * 10;
     }
     size_t customerTableSize() const
     {
-        return num_warehouses * 2 * 20 * 96'000;
+        return num_warehouses * 2 * 10 * 3'000;
     }
     size_t historyTableSize() const
     {
+        return num_warehouses * 2 * 20;
+        /* TODO: fix history table size */
         return num_warehouses * 2 * 20 * 96'000 * num_warehouses * 2 * 20;
     }
     size_t newOrderTableSize() const
     {
-        return order_table_size;
+        return num_warehouses * 2 * 10 * 900 + num_txns * (epochs + 1);
     }
     size_t orderTableSize() const
     {
-        return order_table_size;
+        return num_warehouses * 2 * 10 * 3000 + num_txns * (epochs + 1);
     }
     size_t orderLineTableSize() const
     {
-        return orderline_table_size;
+        return num_warehouses * 10 * 15 * 3000 + num_txns * (epochs + 1) * 15;
     }
     size_t itemTableSize() const
     {
@@ -73,7 +75,7 @@ struct TpccConfig
     }
     size_t stockTableSize() const
     {
-        return 200'000 * num_warehouses * 2;
+        return 200'000 * num_warehouses;
     }
 };
 

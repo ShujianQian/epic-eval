@@ -25,7 +25,8 @@ union WarehouseKey
     {
         baseType w_id : ceilLog2(2 * kMaxWarehouses);
     } key;
-    baseType base_key;
+    baseType base_key = 0;
+    WarehouseKey() = default;
     explicit WarehouseKey(baseType w_id)
     {
         base_key = 0;
@@ -55,7 +56,8 @@ union DistrictKey
         baseType d_id : ceilLog2(20);
         baseType d_w_id : ceilLog2(2 * kMaxWarehouses);
     } key;
-    baseType base_key;
+    baseType base_key = 0;
+    DistrictKey() = default;
     DistrictKey(baseType d_id, baseType d_w_id)
     {
         base_key = 0;
@@ -87,7 +89,8 @@ union CustomerKey
         baseType c_d_id : ceilLog2(20);
         baseType c_w_id : ceilLog2(2 * kMaxWarehouses);
     } key;
-    baseType base_key;
+    baseType base_key = 0;
+    CustomerKey() = default;
     CustomerKey(baseType c_id, baseType c_d_id, baseType c_w_id)
     {
         base_key = 0;
@@ -136,7 +139,8 @@ union HistoryKey
         baseType h_w_id : ceilLog2(2 * kMaxWarehouses);
         baseType h_date : ceilLog2(1'000'000);
     } key;
-    baseType base_key;
+    baseType base_key = 0;
+    HistoryKey() = default;
     HistoryKey(baseType h_c_id, baseType h_c_d_id, baseType h_c_w_id, baseType h_d_id, baseType h_w_id, baseType h_date)
     {
         base_key = 0;
@@ -165,7 +169,8 @@ union NewOrderKey
         baseType no_d_id : ceilLog2(20);
         baseType no_w_id : ceilLog2(2 * kMaxWarehouses);
     };
-    baseType base_key;
+    baseType base_key = 0;
+    NewOrderKey() = default;
     NewOrderKey(baseType no_o_id, baseType no_d_id, baseType no_w_id)
     {
         base_key = 0;
@@ -189,7 +194,8 @@ union OrderKey
         baseType o_d_id : ceilLog2(20);
         baseType o_w_id : ceilLog2(2 * kMaxWarehouses);
     };
-    baseType base_key;
+    baseType base_key = 0;
+    OrderKey() = default;
     OrderKey(baseType o_id, baseType o_d_id, baseType o_w_id)
     {
         base_key = 0;
@@ -218,15 +224,16 @@ union OrderLineKey
         baseType ol_d_id : ceilLog2(20);
         baseType ol_w_id : ceilLog2(2 * kMaxWarehouses);
         baseType ol_number : ceilLog2(15);
-    } key;
-    baseType base_key;
+    };
+    baseType base_key = 0;
+    OrderLineKey() = default;
     OrderLineKey(baseType ol_o_id, baseType ol_d_id, baseType ol_w_id, baseType ol_number)
     {
         base_key = 0;
-        key.ol_o_id = ol_o_id;
-        key.ol_d_id = ol_d_id;
-        key.ol_w_id = ol_w_id;
-        key.ol_number = ol_number;
+        this->ol_o_id = ol_o_id;
+        this->ol_d_id = ol_d_id;
+        this->ol_w_id = ol_w_id;
+        this->ol_number = ol_number;
     }
 };
 
@@ -247,7 +254,8 @@ union ItemKey
     {
         baseType i_id : ceilLog2(200'000);
     } key;
-    baseType base_key;
+    baseType base_key = 0;
+    ItemKey() = default;
     explicit ItemKey(baseType i_id)
     {
         base_key = 0;
@@ -273,7 +281,8 @@ union StockKey
         baseType s_i_id : ceilLog2(200'000);
         baseType s_w_id : ceilLog2(2 * kMaxWarehouses);
     } key;
-    baseType base_key;
+    baseType base_key = 0;
+    StockKey() = default;
     StockKey(baseType s_i_id, baseType s_w_id)
     {
         base_key = 0;
@@ -296,58 +305,6 @@ struct StockDataValue
     uint8_t s_data[52];
     uint8_t s_dist[10][24];
 };
-
-class TpccIndex
-{
-private:
-    std::unique_ptr<UnorderedIndex<WarehouseKey>> g_warehouse_index;
-    std::unique_ptr<UnorderedIndex<DistrictKey>> g_district_index;
-    std::unique_ptr<UnorderedIndex<CustomerKey>> g_customer_index;
-    std::unique_ptr<UnorderedIndex<HistoryKey>> g_history_index;
-    std::unique_ptr<UnorderedIndex<NewOrderKey>> g_new_order_index;
-    std::unique_ptr<UnorderedIndex<OrderKey>> g_order_index;
-    std::unique_ptr<UnorderedIndex<OrderLineKey>> g_order_line_index;
-    std::unique_ptr<UnorderedIndex<ItemKey>> g_item_index;
-    std::unique_ptr<UnorderedIndex<StockKey>> g_stock_index;
-
-    const TpccConfig &tpcc_config;
-
-public:
-    TpccIndex(const TpccConfig &tpcc_config);
-
-    void indexTxnWrites(BaseTxn *txn, BaseTxn *index, uint32_t epoch_id);
-    void indexTxnWrites(NewOrderTxnInput<FixedSizeTxn> *txn, void *index_ptr, uint32_t epoch_id);
-    void indexTxnWrites(PaymentTxnInput *txn, void *index_ptr, uint32_t epoch_id);
-
-    void indexTxnReads(BaseTxn *txn, BaseTxn *index, uint32_t epoch_id);
-    void indexTxnReads(NewOrderTxnInput<FixedSizeTxn> *txn, void *index_ptr, uint32_t epoch_id);
-    void indexTxnReads(PaymentTxnInput *txn, void *index_ptr, uint32_t epoch_id);
-
-    friend class TpccLoader;
-};
-
-class TpccLoader
-{
-private:
-    const TpccConfig &tpcc_config;
-    const TpccIndex &index;
-
-    void loadWarehouseTable();
-    void loadDistrictTable();
-    void loadCustomerTable();
-    void loadHistoryTable();
-    void loadOrderTables();
-    void loadItemTable();
-    void loadStockTable();
-
-public:
-    TpccLoader(const TpccConfig &tpcc_config, const TpccIndex &index)
-        : tpcc_config(tpcc_config)
-        , index(index){};
-
-    void loadInitialData();
-};
-
 } // namespace epic::tpcc
 
 #endif // TPCC_TABLE_H

@@ -5,9 +5,12 @@
 #ifndef EPIC_GACCO_BENCHMARKS_TPCC_H
 #define EPIC_GACCO_BENCHMARKS_TPCC_H
 
+#include <vector>
+
 #include <tpcc_config.h>
 #include <txn.h>
 #include <benchmarks/tpcc_txn.h>
+#include <benchmarks/tpcc_index.h>
 #include <benchmarks/tpcc_table.h>
 #include <txn_bridge.h>
 #include <gacco/gpu_execution_planner.h>
@@ -23,22 +26,24 @@ using epic::TxnArray;
 using epic::TxnInputArray;
 using epic::tpcc::TpccTxn;
 using epic::tpcc::TpccTxnParam;
+using epic::tpcc::TpccTxnParam;
 using epic::tpcc::TpccIndex;
-using epic::tpcc::TpccLoader;
+using epic::tpcc::TpccCpuIndex;
 
 class TpccDb
 {
 public:
     TpccConfig config;
 
-    TxnInputArray<TpccTxn> txn_array;
+    std::vector<TxnArray<TpccTxn>> txn_array;
+    TxnArray<TpccTxn> index_input;
     TxnArray<TpccTxnParam> index_output;
     TxnArray<TpccTxnParam> initialization_input;
 
+    TxnBridge input_index_bridge;
     TxnBridge index_initialization_bridge;
 
-    TpccIndex index;
-    TpccLoader loader;
+    std::shared_ptr<TpccIndex> index;
 
     std::shared_ptr<TableExecutionPlanner> warehouse_planner;
     std::shared_ptr<TableExecutionPlanner> district_planner;

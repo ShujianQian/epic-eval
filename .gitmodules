@@ -1,3 +1,9 @@
 [submodule "third_party/spdlog"]
 	path = third_party/spdlog
 	url = git@github.com:gabime/spdlog.git
+[submodule "third_party/slabhash"]
+	path = third_party/slabhash
+	url = git@github.com:owensgroup/SlabHash.git
+[submodule "third_party/cuco"]
+	path = third_party/cuco
+	url = git@github.com:NVIDIA/cuCollections.git

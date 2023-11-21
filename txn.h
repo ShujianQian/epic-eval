@@ -14,6 +14,7 @@
 #include "util_log.h"
 #include "util_device_type.h"
 #include "util_math.h"
+#include <util_memory.h>
 
 namespace epic {
 
@@ -41,11 +42,11 @@ public:
         : num_txns(num_txns)
         , epochs(epochs)
     {
-        txns = malloc(kBaseTxnSize * num_txns * epochs);
+        txns = Malloc(kBaseTxnSize * num_txns * epochs);
     }
     ~TxnInputArray()
     {
-        free(txns);
+        Free(txns);
     }
     inline BaseTxn *getTxn(size_t epoch, size_t index)
     {
@@ -81,7 +82,7 @@ public:
 
         if (device_type == DeviceType::CPU)
         {
-            txns = malloc(kBaseTxnSize * num_txns);
+            txns = Malloc(kBaseTxnSize * num_txns);
         }
 #ifdef EPIC_CUDA_AVAILABLE
         else if (device_type == DeviceType::GPU)
@@ -109,7 +110,7 @@ public:
         if (device == DeviceType::CPU)
         {
             logger.Trace("Allocating {} bytes for {} txns on CPU", formatSizeBytes(kBaseTxnSize * num_txns), num_txns);
-            txns = malloc(kBaseTxnSize * num_txns);
+            txns = Malloc(kBaseTxnSize * num_txns);
         }
 #ifdef EPIC_CUDA_AVAILABLE
         else if (device == DeviceType::GPU)
@@ -137,7 +138,7 @@ public:
         if (device == DeviceType::CPU)
         {
             logger.Trace("Deallocating {} bytes for {} txns on CPU", formatSizeBytes(kBaseTxnSize * num_txns), num_txns);
-            free(txns);
+            Free(txns);
             txns = nullptr;
         }
 #ifdef EPIC_CUDA_AVAILABLE

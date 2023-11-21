@@ -12,6 +12,7 @@
 #include <benchmarks/tpcc_storage.h>
 #include "benchmarks/tpcc_submitter.h"
 
+#include <vector>
 #include <memory>
 
 #include "execution_planner.h"
@@ -19,6 +20,7 @@
 #include "txn_bridge.h"
 #include <benchmarks/tpcc_executor.h>
 #include <benchmarks/tpcc_gpu_executor.h>
+#include <benchmarks/tpcc_index.h>
 
 namespace epic::tpcc {
 
@@ -30,15 +32,16 @@ private:
     Table warehouse_table;
 
     TpccConfig config;
-    TxnInputArray<TpccTxn> txn_array;
+    std::vector<TxnArray<TpccTxn>> txn_array;
+    TxnArray<TpccTxn> index_input;
     TxnArray<TpccTxnParam> index_output;
     TxnArray<TpccTxnParam> initialization_input;
     TxnArray<TpccExecPlan> initialization_output;
 
+    TxnBridge input_index_bridge;
     TxnBridge index_initialization_bridge;
 
-    TpccIndex index;
-    TpccLoader loader;
+    std::shared_ptr<TpccIndex> index;
 
     std::shared_ptr<TableExecutionPlanner> warehouse_planner;
     std::shared_ptr<TableExecutionPlanner> district_planner;

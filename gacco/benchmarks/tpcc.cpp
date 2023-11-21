@@ -13,40 +13,44 @@
 #include <gacco/benchmarks/tpcc_gpu_submitter.h>
 #include <gacco/benchmarks/tpcc_gpu_executor.h>
 #include <gacco/benchmarks/tpcc_storage.h>
+#include <benchmarks/tpcc_gpu_index.h>
 
 namespace gacco::tpcc {
 
 using epic::BaseTxn;
+using epic::tpcc::TpccGpuIndex;
 
 TpccDb::TpccDb(TpccConfig config)
     : config(config)
-    , index(this->config)
-    , loader(this->config, index)
-    , txn_array(config.num_txns, config.epochs)
+    , txn_array(config.num_txns, {config.num_txns, epic::DeviceType::CPU})
+    , index_input(config.num_txns, config.index_device, false)
     , index_output(config.num_txns, config.index_device)
     , initialization_input(config.num_txns, config.initialize_device, false)
 {
+//    index = std::make_shared<TpccCpuIndex>(config);
+    index = std::make_shared<TpccGpuIndex>(config);
+    input_index_bridge.Link(txn_array[0], index_input);
     index_initialization_bridge.Link(index_output, initialization_input);
     if (config.initialize_device == epic::DeviceType::GPU)
     {
         epic::GpuAllocator allocator;
         warehouse_planner = std::make_shared<GpuTableExecutionPlanner>(
-            "warehouse", allocator, 0, 2, config.num_txns, config.num_warehouses);
+            "warehouse", allocator, 0, 2, config.num_txns, config.warehouseTableSize());
         district_planner = std::make_shared<GpuTableExecutionPlanner>(
-            "district", allocator, 0, 2, config.num_txns, config.num_warehouses * 10);
+            "district", allocator, 0, 2, config.num_txns, config.districtTableSize());
         customer_planner = std::make_shared<GpuTableExecutionPlanner>(
-            "customer", allocator, 0, 2, config.num_txns, config.num_warehouses * 10 * 3000);
+            "customer", allocator, 0, 2, config.num_txns, config.customerTableSize());
         history_planner = std::make_shared<GpuTableExecutionPlanner>(
-            "history", allocator, 0, 1, config.num_txns, config.num_warehouses * 10 * 3000);
+            "history", allocator, 0, 1, config.num_txns, config.historyTableSize());
         new_order_planner = std::make_shared<GpuTableExecutionPlanner>(
-            "new_order", allocator, 0, 1, config.num_txns, config.order_table_size);
+            "new_order", allocator, 0, 1, config.num_txns, config.newOrderTableSize());
         order_planner = std::make_shared<GpuTableExecutionPlanner>(
-            "order", allocator, 0, 1, config.num_txns, config.order_table_size);
+            "order", allocator, 0, 1, config.num_txns, config.orderTableSize());
         order_line_planner = std::make_shared<GpuTableExecutionPlanner>(
-            "order_line", allocator, 0, 15, config.num_txns, config.orderline_table_size);
-        item_planner = std::make_shared<GpuTableExecutionPlanner>("item", allocator, 0, 15, config.num_txns, 100'000);
+            "order_line", allocator, 0, 15, config.num_txns, config.orderLineTableSize());
+        item_planner = std::make_shared<GpuTableExecutionPlanner>("item", allocator, 0, 15, config.num_txns, config.itemTableSize());
         stock_planner = std::make_shared<GpuTableExecutionPlanner>(
-            "stock", allocator, 0, 15 * 2, config.num_txns, 100'000 * config.num_warehouses);
+            "stock", allocator, 0, 15 * 2, config.num_txns, config.stockTableSize());
 
         warehouse_planner->Initialize();
         district_planner->Initialize();
@@ -98,6 +102,8 @@ TpccDb::TpccDb(TpccConfig config)
 
     if (config.execution_device == epic::DeviceType::GPU)
     {
+        auto &logger = epic::Logger::GetInstance();
+        logger.Info("Allocating records");
         TpccRecords records;
         epic::GpuAllocator allocator;
         records.warehouse_record =
@@ -139,7 +145,7 @@ TpccDb::TpccDb(TpccConfig config)
 
 void TpccDb::loadInitialData()
 {
-    loader.loadInitialData();
+    index->loadInitialData();
 }
 
 void TpccDb::generateTxns()
@@ -153,7 +159,7 @@ void TpccDb::generateTxns()
         logger.Info("Generating epoch {}", epoch);
         for (size_t i = 0; i < config.num_txns; ++i)
         {
-            BaseTxn *txn = txn_array.getTxn(epoch, i);
+            BaseTxn *txn = txn_array[epoch].getTxn(i);
             uint32_t timestamp = epoch * config.num_txns + i;
             generator.generateTxn(txn, i, timestamp);
         }
@@ -162,22 +168,27 @@ void TpccDb::generateTxns()
 
 void TpccDb::indexEpoch(uint32_t epoch_id)
 {
-    /* zero-indexed */
-    uint32_t index_epoch_id = epoch_id - 1;
+    /* TODO: remove */
+    auto &logger = epic::Logger::GetInstance();
+    logger.Error("Deprecated function");
+    exit(-1);
 
-    /* it's important to index writes before reads */
-    for (uint32_t i = 0; i < config.num_txns; ++i)
-    {
-        BaseTxn *txn = txn_array.getTxn(index_epoch_id, i);
-        BaseTxn *txn_param = index_output.getTxn(i);
-        index.indexTxnWrites(txn, txn_param, index_epoch_id);
-    }
-    for (uint32_t i = 0; i < config.num_txns; ++i)
-    {
-        BaseTxn *txn = txn_array.getTxn(index_epoch_id, i);
-        BaseTxn *txn_param = index_output.getTxn(i);
-        index.indexTxnReads(txn, txn_param, index_epoch_id);
-    }
+//    /* zero-indexed */
+//    uint32_t index_epoch_id = epoch_id - 1;
+//
+//    /* it's important to index writes before reads */
+//    for (uint32_t i = 0; i < config.num_txns; ++i)
+//    {
+//        BaseTxn *txn = txn_array.getTxn(index_epoch_id, i);
+//        BaseTxn *txn_param = index_output.getTxn(i);
+//        index->indexTxnWrites(txn, txn_param, index_epoch_id);
+//    }
+//    for (uint32_t i = 0; i < config.num_txns; ++i)
+//    {
+//        BaseTxn *txn = txn_array.getTxn(index_epoch_id, i);
+//        BaseTxn *txn_param = index_output.getTxn(i);
+//        index->indexTxnReads(txn, txn_param, index_epoch_id);
+//    }
 }
 
 void TpccDb::runBenchmark()
@@ -187,10 +198,44 @@ void TpccDb::runBenchmark()
     for (uint32_t epoch_id = 1; epoch_id <= config.epochs; ++epoch_id)
     {
         logger.Info("Running epoch {}", epoch_id);
+
+        /* transfer */
+        {
+            start_time = std::chrono::high_resolution_clock::now();
+            uint32_t index_epoch_id = epoch_id - 1;
+            input_index_bridge.Link(txn_array[index_epoch_id], index_input);
+            input_index_bridge.StartTransfer();
+            input_index_bridge.FinishTransfer();
+
+#if 0 // DEBUG
+            {
+                constexpr size_t max_print_size = 100u;
+                constexpr size_t base_txn_size = TxnArray<TpccTxn>::kBaseTxnSize;
+                uint32_t print_size = std::min(config.num_txns, max_print_size);
+                uint32_t copy_size = print_size * base_txn_size;
+                uint8_t txn_params[max_print_size * base_txn_size];
+
+                transferGpuToCpu(txn_params, index_input.txns, copy_size);
+
+                for (int i = 0; i < print_size; ++i)
+                {
+                    auto param = reinterpret_cast<BaseTxn *>(txn_params + i * base_txn_size)->txn_type;
+                    logger.Info("txn {} type {}", i, param);
+                }
+                logger.flush();
+            }
+
+#endif
+            end_time = std::chrono::high_resolution_clock::now();
+            logger.Info("Epoch {} transfer time: {} us", epoch_id,
+                        std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count());
+        }
+
         /* index */
         {
             start_time = std::chrono::high_resolution_clock::now();
-            indexEpoch(epoch_id);
+            uint32_t index_epoch_id = epoch_id - 1;
+            index->indexTxns(index_input, index_output, index_epoch_id);
             end_time = std::chrono::high_resolution_clock::now();
             logger.Info("Epoch {} indexing time: {} us", epoch_id,
                 std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count());

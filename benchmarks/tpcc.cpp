@@ -20,6 +20,7 @@
 #include "benchmarks/tpcc_executor.h"
 #include "benchmarks/tpcc_gpu_executor.h"
 #include <benchmarks/tpcc_txn_gen.h>
+#include <benchmarks/tpcc_gpu_index.h>
 
 namespace epic::tpcc {
 TpccTxnMix::TpccTxnMix(
@@ -35,13 +36,15 @@ TpccTxnMix::TpccTxnMix(
 
 TpccDb::TpccDb(TpccConfig config)
     : config(config)
-    , index(this->config)
-    , txn_array(config.num_txns, config.epochs)
+    , txn_array(config.epochs, {config.num_txns, DeviceType::CPU})
+    , index_input(config.num_txns, config.index_device, false)
     , index_output(config.num_txns, config.index_device)
     , initialization_input(config.num_txns, config.initialize_device, false)
     , initialization_output(config.num_txns, config.initialize_device)
-    , loader(this->config, index)
 {
+    //    index = std::make_shared<TpccCpuIndex>(config);
+    index = std::make_shared<TpccGpuIndex>(config);
+    input_index_bridge.Link(txn_array[0], index_input);
     index_initialization_bridge.Link(index_output, initialization_input);
     if (config.initialize_device == DeviceType::GPU)
     {
@@ -206,7 +209,7 @@ void TpccDb::generateTxns()
         logger.Info("Generating epoch {}", epoch);
         for (size_t i = 0; i < config.num_txns; ++i)
         {
-            BaseTxn *txn = txn_array.getTxn(epoch, i);
+            BaseTxn *txn = txn_array[epoch].getTxn(i);
             uint32_t timestamp = epoch * config.num_txns + i;
             generator.generateTxn(txn, timestamp);
         }
@@ -215,7 +218,7 @@ void TpccDb::generateTxns()
 
 void TpccDb::loadInitialData()
 {
-    loader.loadInitialData();
+    index->loadInitialData();
 }
 
 void TpccDb::runBenchmark()
@@ -225,10 +228,43 @@ void TpccDb::runBenchmark()
     for (uint32_t epoch_id = 1; epoch_id <= config.epochs; ++epoch_id)
     {
         logger.Info("Running epoch {}", epoch_id);
+        /* transfer */
+        {
+            start_time = std::chrono::high_resolution_clock::now();
+            uint32_t index_epoch_id = epoch_id - 1;
+            input_index_bridge.Link(txn_array[index_epoch_id], index_input);
+            input_index_bridge.StartTransfer();
+            input_index_bridge.FinishTransfer();
+
+#if 0 // DEBUG
+            {
+                constexpr size_t max_print_size = 100u;
+                constexpr size_t base_txn_size = TxnArray<TpccTxn>::kBaseTxnSize;
+                uint32_t print_size = std::min(config.num_txns, max_print_size);
+                uint32_t copy_size = print_size * base_txn_size;
+                uint8_t txn_params[max_print_size * base_txn_size];
+
+                transferGpuToCpu(txn_params, index_input.txns, copy_size);
+
+                for (int i = 0; i < print_size; ++i)
+                {
+                    auto param = reinterpret_cast<BaseTxn *>(txn_params + i * base_txn_size)->txn_type;
+                    logger.Info("txn {} type {}", i, param);
+                }
+                logger.flush();
+            }
+
+#endif
+            end_time = std::chrono::high_resolution_clock::now();
+            logger.Info("Epoch {} transfer time: {} us", epoch_id,
+                std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count());
+        }
+
         /* index */
         {
             start_time = std::chrono::high_resolution_clock::now();
-            indexEpoch(epoch_id);
+            uint32_t index_epoch_id = epoch_id - 1;
+            index->indexTxns(index_input, index_output, index_epoch_id);
             end_time = std::chrono::high_resolution_clock::now();
             logger.Info("Epoch {} indexing time: {} us", epoch_id,
                 std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count());
@@ -422,21 +458,26 @@ void TpccDb::runBenchmark()
 }
 void TpccDb::indexEpoch(uint32_t epoch_id)
 {
-    /* zero-indexed */
-    uint32_t index_epoch_id = epoch_id - 1;
+    /* TODO: remove */
+    auto &logger = Logger::GetInstance();
+    logger.Error("Deprecated function");
+    exit(-1);
 
-    /* it's important to index writes before reads */
-    for (uint32_t i = 0; i < config.num_txns; ++i)
-    {
-        BaseTxn *txn = txn_array.getTxn(index_epoch_id, i);
-        BaseTxn *txn_param = index_output.getTxn(i);
-        index.indexTxnWrites(txn, txn_param, index_epoch_id);
-    }
-    for (uint32_t i = 0; i < config.num_txns; ++i)
-    {
-        BaseTxn *txn = txn_array.getTxn(index_epoch_id, i);
-        BaseTxn *txn_param = index_output.getTxn(i);
-        index.indexTxnReads(txn, txn_param, index_epoch_id);
-    }
+    //    /* zero-indexed */
+    //    uint32_t index_epoch_id = epoch_id - 1;
+    //
+    //    /* it's important to index writes before reads */
+    //    for (uint32_t i = 0; i < config.num_txns; ++i)
+    //    {
+    //        BaseTxn *txn = txn_array.getTxn(index_epoch_id, i);
+    //        BaseTxn *txn_param = index_output.getTxn(i);
+    //        index->indexTxnWrites(txn, txn_param, index_epoch_id);
+    //    }
+    //    for (uint32_t i = 0; i < config.num_txns; ++i)
+    //    {
+    //        BaseTxn *txn = txn_array.getTxn(index_epoch_id, i);
+    //        BaseTxn *txn_param = index_output.getTxn(i);
+    //        index->indexTxnReads(txn, txn_param, index_epoch_id);
+    //    }
 }
 } // namespace epic::tpcc

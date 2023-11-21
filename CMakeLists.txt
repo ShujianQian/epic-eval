@@ -12,7 +12,9 @@ if (CUDA_FOUND)
     enable_language(CUDA)
     add_definitions(-DEPIC_CUDA_AVAILABLE)
     set(CMAKE_CUDA_STANDARD 17)
-    set(CMAKE_CUDA_FLAGS_DEBUG "-g -G")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-relaxed-constexpr")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-extended-lambda")
+    set(CMAKE_CUDA_FLAGS_DEBUG "${CMAKE_CUDA_FLAGS_DEBUG} -g -G")
 else ()
     message(WARNING "CUDA not found, using CPU only. CUDA Related modules will not be available.")
 endif ()
@@ -40,7 +42,10 @@ set(EPIC_GPU_SOURCE
         util_gpu_transfer.cu
         benchmarks/tpcc_gpu_submitter.cu
         gpu_configuration.cu
-        benchmarks/tpcc_gpu_executor.cu)
+        benchmarks/tpcc_gpu_executor.cu
+        gpu_hashtable_index.cu
+        util_memory.cu
+        benchmarks/tpcc_gpu_index.cu)
 
 set(GACCO_GPU_SOURCE
     gacco/gpu_execution_planner.cu
@@ -54,6 +59,9 @@ else ()
 endif ()
 
 include_directories(${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/gpu_src ${CMAKE_SOURCE_DIR}/third_party/spdlog/include)
+if (CUDA_FOUND)
+    include_directories(${CMAKE_SOURCE_DIR}/third_party/cuco/include)
+endif()
 add_library(epic STATIC ${EPIC_SOURCE})
 if (CUDA_FOUND)
     set_property(TARGET epic PROPERTY CUDA_ARCHITECTURES 86)

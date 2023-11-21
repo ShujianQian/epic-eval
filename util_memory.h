@@ -17,6 +17,26 @@ struct FreeDelete
     }
 };
 
+void *allocatePinnedMemory(size_t size);
+inline void *Malloc(size_t size)
+{
+#ifdef EPIC_CUDA_AVAILABLE
+    return allocatePinnedMemory(size);
+#else
+    return malloc(size);
+#endif
+}
+
+void freePinedMemory(void *ptr);
+inline void Free(void *ptr)
+{
+#ifdef EPIC_CUDA_AVAILABLE
+    freePinedMemory(ptr);
+#else
+    free(ptr);
+#endif
+}
+
 } // namespace epic
 
 #endif // UTIL_MEMORY_H
