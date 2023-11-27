@@ -9,7 +9,7 @@
 #include <gacco/benchmarks/tpcc_txn_gen.h>
 #include <util_log.h>
 #include <util_gpu_transfer.h>
-#include <gpu_allocator.h>
+#include "gpu_allocator.h"
 #include <gacco/benchmarks/tpcc_gpu_submitter.h>
 #include <gacco/benchmarks/tpcc_gpu_executor.h>
 #include <gacco/benchmarks/tpcc_storage.h>
@@ -22,12 +22,16 @@ using epic::tpcc::TpccGpuIndex;
 
 TpccDb::TpccDb(TpccConfig config)
     : config(config)
-    , txn_array(config.num_txns, {config.num_txns, epic::DeviceType::CPU})
+    , txn_array(config.num_txns)
     , index_input(config.num_txns, config.index_device, false)
     , index_output(config.num_txns, config.index_device)
     , initialization_input(config.num_txns, config.initialize_device, false)
 {
-//    index = std::make_shared<TpccCpuIndex>(config);
+    for (int i = 0; i < config.epochs; ++i)
+    {
+        txn_array[i] = TxnArray<TpccTxn>(config.num_txns, epic::DeviceType::CPU);
+    }
+    //    index = std::make_shared<TpccCpuIndex>(config);
     index = std::make_shared<TpccGpuIndex>(config);
     input_index_bridge.Link(txn_array[0], index_input);
     index_initialization_bridge.Link(index_output, initialization_input);

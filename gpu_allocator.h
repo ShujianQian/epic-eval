@@ -5,7 +5,7 @@
 #ifndef GPU_ALLOCATOR_H
 #define GPU_ALLOCATOR_H
 
-#include "../allocator.h"
+#include "allocator.h"
 
 #ifdef EPIC_CUDA_AVAILABLE
 

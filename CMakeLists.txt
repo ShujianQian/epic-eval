@@ -34,7 +34,7 @@ set(GACCO_CPU_SOURCE
         gacco/benchmarks/tpcc_txn_gen.cpp)
 
 set(EPIC_GPU_SOURCE
-        gpu_src/epic_gpu.cu gpu_src/gpu_allocator.cu
+        gpu_src/epic_gpu.cu gpu_allocator.cu
         gpu_execution_planner.cu
         benchmarks/gpu_ycsb.cu
         gpu_txn_bridge.cu
@@ -45,7 +45,10 @@ set(EPIC_GPU_SOURCE
         benchmarks/tpcc_gpu_executor.cu
         gpu_hashtable_index.cu
         util_memory.cu
-        benchmarks/tpcc_gpu_index.cu)
+        benchmarks/tpcc_gpu_index.cu
+        benchmarks/ycsb_gpu_index.cu
+        benchmarks/ycsb_gpu_submitter.cu
+        benchmarks/ycsb_gpu_executor.cu)
 
 set(GACCO_GPU_SOURCE
     gacco/gpu_execution_planner.cu

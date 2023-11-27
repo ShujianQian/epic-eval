@@ -18,13 +18,14 @@
 #include "execution_planner.h"
 #include "table.h"
 #include "txn_bridge.h"
+#include <benchmarks/benchmark.h>
 #include <benchmarks/tpcc_executor.h>
 #include <benchmarks/tpcc_gpu_executor.h>
 #include <benchmarks/tpcc_index.h>
 
 namespace epic::tpcc {
 
-class TpccDb
+class TpccDb : public Benchmark
 {
 private:
     TableExecutionPlanner *planner;
@@ -61,9 +62,9 @@ private:
 public:
     explicit TpccDb(TpccConfig config);
 
-    void loadInitialData();
-    void generateTxns();
-    void runBenchmark();
+    void loadInitialData() override;
+    void generateTxns() override;
+    void runBenchmark() override;
 
     void indexEpoch(uint32_t epoch_id);
 

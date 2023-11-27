@@ -139,7 +139,7 @@ void __device__ __forceinline__ indexTpccTxn(NewOrderTxnInput<FixedSizeTxn> *txn
         WarehouseKey warehouse_key;
         warehouse_key.key.w_id = txn->origin_w_id;
         auto warehouse_found = index_view.warehouse_view.find(warehouse_key.base_key);
-        if (warehouse_found->first)
+        if (warehouse_found != index_view.warehouse_view.end())
         {
             index->warehouse_id = warehouse_found->second.load(cuda::std::memory_order_relaxed);
         }
@@ -154,7 +154,7 @@ void __device__ __forceinline__ indexTpccTxn(NewOrderTxnInput<FixedSizeTxn> *txn
         district_key.key.d_id = txn->d_id;
         district_key.key.d_w_id = txn->origin_w_id;
         auto district_found = index_view.district_view.find(district_key.base_key);
-        if (district_found->first)
+        if (district_found != index_view.district_view.end())
         {
             index->district_id = district_found->second.load(cuda::std::memory_order_relaxed);
         }
@@ -170,7 +170,7 @@ void __device__ __forceinline__ indexTpccTxn(NewOrderTxnInput<FixedSizeTxn> *txn
         customer_key.key.c_d_id = txn->d_id;
         customer_key.key.c_w_id = txn->origin_w_id;
         auto customer_found = index_view.customer_view.find(customer_key.base_key);
-        if (customer_found->first)
+        if (customer_found != index_view.customer_view.end())
         {
             index->customer_id = customer_found->second.load(cuda::std::memory_order_relaxed);
         }
@@ -187,7 +187,7 @@ void __device__ __forceinline__ indexTpccTxn(NewOrderTxnInput<FixedSizeTxn> *txn
         order_key.o_w_id = txn->origin_w_id;
 
         auto order_found = index_view.order_view.find(order_key.base_key);
-        if (order_found->first)
+        if (order_found != index_view.order_view.end())
         {
             index->order_id = order_found->second.load(cuda::std::memory_order_relaxed);
         }
@@ -204,7 +204,7 @@ void __device__ __forceinline__ indexTpccTxn(NewOrderTxnInput<FixedSizeTxn> *txn
         new_order_key.no_w_id = txn->origin_w_id;
 
         auto new_order_found = index_view.new_order_view.find(new_order_key.base_key);
-        if (new_order_found->first)
+        if (new_order_found != index_view.new_order_view.end())
         {
             index->new_order_id = new_order_found->second.load(cuda::std::memory_order_relaxed);
         }
@@ -224,7 +224,7 @@ void __device__ __forceinline__ indexTpccTxn(NewOrderTxnInput<FixedSizeTxn> *txn
                 stock_key.key.s_i_id = txn->items[i].i_id;
                 stock_key.key.s_w_id = txn->items[i].w_id;
                 auto stock_found = index_view.stock_view.find(stock_key.base_key);
-                if (stock_found->first)
+                if (stock_found != index_view.stock_view.end())
                 {
                     index->items[i].stock_id = stock_found->second.load(cuda::std::memory_order_relaxed);
                 }
@@ -240,7 +240,7 @@ void __device__ __forceinline__ indexTpccTxn(NewOrderTxnInput<FixedSizeTxn> *txn
                 order_line_key.ol_w_id = txn->items[i].w_id;
                 order_line_key.ol_number = i + 1;
                 auto order_line_found = index_view.order_line_view.find(order_line_key.base_key);
-                if (order_line_found->first)
+                if (order_line_found != index_view.order_line_view.end())
                 {
                     index->items[i].order_line_id = order_line_found->second.load(cuda::std::memory_order_relaxed);
                 }
@@ -253,7 +253,7 @@ void __device__ __forceinline__ indexTpccTxn(NewOrderTxnInput<FixedSizeTxn> *txn
                 ItemKey item_key;
                 item_key.key.i_id = txn->items[i].i_id;
                 auto item_found = index_view.item_view.find(item_key.base_key);
-                if (item_found->first)
+                if (item_found != index_view.item_view.end())
                 {
                     index->items[i].item_id = item_found->second.load(cuda::std::memory_order_relaxed);
                 }
@@ -273,7 +273,7 @@ void __device__ __forceinline__ indexTpccTxn(
         WarehouseKey warehouse_key;
         warehouse_key.key.w_id = txn->warehouse_id;
         auto warehouse_found = index_view.warehouse_view.find(warehouse_key.base_key);
-        if (warehouse_found->first)
+        if (warehouse_found != index_view.warehouse_view.end())
         {
             index->warehouse_id = warehouse_found->second.load(cuda::std::memory_order_relaxed);
         }
@@ -288,7 +288,7 @@ void __device__ __forceinline__ indexTpccTxn(
         district_key.key.d_id = txn->district_id;
         district_key.key.d_w_id = txn->warehouse_id;
         auto district_found = index_view.district_view.find(district_key.base_key);
-        if (district_found->first)
+        if (district_found != index_view.district_view.end())
         {
             index->district_id = district_found->second.load(cuda::std::memory_order_relaxed);
         }
@@ -304,7 +304,7 @@ void __device__ __forceinline__ indexTpccTxn(
         customer_key.key.c_d_id = txn->customer_district_id;
         customer_key.key.c_w_id = txn->customer_warehouse_id;
         auto customer_found = index_view.customer_view.find(customer_key.base_key);
-        if (customer_found->first)
+        if (customer_found != index_view.customer_view.end())
         {
             index->customer_id = customer_found->second.load(cuda::std::memory_order_relaxed);
         }
@@ -728,6 +728,8 @@ public:
         prepareTpccIndexKernel<<<(tpcc_config.num_txns + block_size - 1) / block_size, block_size>>>(
             GpuTxnArray(txn_array), d_order_insert, d_new_order_insert, d_order_line_insert, tpcc_config.num_txns);
 
+        gpu_err_check(cudaPeekAtLastError());
+
         cub::DeviceSelect::If(d_temp_storage, temp_storage_bytes, d_order_insert, d_order_valid_insert,
             d_order_num_insert, tpcc_config.num_txns,
             [] __device__(OrderKey::baseType val) { return val != static_cast<OrderKey::baseType>(-1); });
@@ -767,6 +769,7 @@ public:
 
         indexTpccTxnKernel<<<(tpcc_config.num_txns + block_size - 1) / block_size, block_size>>>(
             GpuTxnArray(txn_array), GpuTxnArray(index_array), index_device_view, tpcc_config.num_txns);
+        gpu_err_check(cudaPeekAtLastError());
         gpu_err_check(cudaDeviceSynchronize());
         logger.Info("Finished indexing transactions");
     }

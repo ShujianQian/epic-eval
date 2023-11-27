@@ -110,13 +110,124 @@ __forceinline__ __device__ void gpuReadFromTableCoop(Record<ValueType> *record, 
     value_to_read = reinterpret_cast<ValueType *>(
         __shfl_sync(all_lanes_mask, reinterpret_cast<uintptr_t>(value_to_read), leader_lane_id));
 
-    if (lane_id >= length)
+    /* read into result */
+    for (int base = 0; base < length; base += 32)
     {
-        return;
+        if (lane_id + base < length)
+        {
+            result += reinterpret_cast<uint32_t *>(value_to_read)[offset + base + lane_id];
+        }
+    }
+}
+
+template<typename ValueType>
+__forceinline__ __device__ void gpuReadMultipleFromTableCoop(Record<ValueType> *record, Version<ValueType> *version,
+    uint32_t record_id, uint32_t read_loc, uint32_t epoch, uint32_t &result, uint32_t lane_id, uint32_t active_mask,
+    uint32_t offset = 0, uint32_t length = (sizeof(ValueType) + sizeof(uint32_t) - 1) / sizeof(uint32_t))
+{
+    constexpr uint32_t leader_lane_id = 0;
+    constexpr uint32_t leader_lane_mask = 1u << leader_lane_id;
+    constexpr uint32_t all_lanes_mask = 0xFFFFFFFFu;
+
+    uint32_t remaining_mask = active_mask;
+    uint32_t lane_mask = 1 << lane_id;
+    ValueType *value_to_read;
+    uint32_t *epoch_to_read = nullptr;
+    if (lane_mask & active_mask)
+    {
+        if (read_loc == loc_record_a)
+        {
+            /* record A read */
+            uint64_t combined_versions =
+                atomicAdd(reinterpret_cast<unsigned long long *>(&record[record_id].version1), 0ull);
+            /* TODO: atomicOperations should not be required here because all properly aligned read/write in CUDA
+               happens atomically */
+            uint32_t version1 = combined_versions & 0xFFFFFFFF;
+            uint32_t version2 = combined_versions >> 32;
+            if (version1 == epoch)
+            {
+                /* version 1 is written in this epoch (record_b) */
+                value_to_read = &record[record_id].value2;
+            }
+            else if (version2 == epoch)
+            {
+                /* version 2 is written in this epoch (record_b) */
+                value_to_read = &record[record_id].value1;
+            }
+            else if (version1 < version2)
+            {
+                /* version 2 is the latest version before this epoch (record_a) */
+                value_to_read = &record[record_id].value2;
+            }
+            else
+            {
+                /* version 1 is the latest version before this epoch (record_a) */
+                value_to_read = &record[record_id].value1;
+            }
+        }
+        else if (read_loc == loc_record_b)
+        {
+            /* record B read */
+            uint64_t combined_versions =
+                atomicAdd(reinterpret_cast<unsigned long long *>(&record[record_id].version1), 0ull);
+            uint32_t version1 = combined_versions & 0xFFFFFFFF;
+            uint32_t version2 = combined_versions >> 32;
+            if (version1 == epoch)
+            {
+                /* version 1 is written in this epoch (record_b) */
+                value_to_read = &record[record_id].value1;
+            }
+            else if (version2 == epoch)
+            {
+                /* version 2 is written in this epoch (record_b) */
+                value_to_read = &record[record_id].value2;
+            }
+            else if (version1 < version2)
+            {
+                /* version 1 will be written in this epoch (record_b) */
+                value_to_read = &record[record_id].value1;
+                /* wait until version 1 is written */
+                epoch_to_read = &record[record_id].version1;
+            }
+            else
+            {
+                /* version 2 will be written in this epohc (record_b) */
+                value_to_read = &record[record_id].value2;
+                /* wait until version 2 is written */
+                epoch_to_read = &record[record_id].version2;
+            }
+        }
+        else
+        {
+            /* version read */
+            value_to_read = &version[read_loc].value;
+            /* wait until version is written */
+            epoch_to_read = &version[read_loc].version;
+        }
     }
 
-    /* read into result */
-    result = reinterpret_cast<uint32_t *>(value_to_read)[offset + lane_id];
+    while (remaining_mask)
+    {
+        uint32_t ready_mask;
+        do
+        {
+            bool ready =
+                !(lane_mask & remaining_mask) || epoch_to_read == nullptr || atomicAdd(epoch_to_read, 0) == epoch;
+            ready_mask = __ballot_sync(remaining_mask, ready);
+        } while (ready_mask == 0);
+        remaining_mask &= ~ready_mask;
+        while (ready_mask)
+        {
+            uint32_t ready_lane_id = __ffs(ready_mask) - 1;
+            ValueType *curr_value_to_read = reinterpret_cast<ValueType *>(
+                __shfl_sync(all_lanes_mask, reinterpret_cast<uintptr_t>(value_to_read), ready_lane_id));
+            if (lane_id < length)
+            {
+                result = reinterpret_cast<uint32_t *>(curr_value_to_read)[offset + lane_id];
+            }
+            ready_mask &= ~(1u << ready_lane_id);
+        }
+    }
 }
 
 template<typename ValueType>
@@ -166,9 +277,12 @@ __forceinline__ __device__ void gpuWriteToTableCoop(Record<ValueType> *record, V
         __shfl_sync(all_lanes_mask, reinterpret_cast<uintptr_t>(value_to_write), leader_lane_id));
 
     /* write to the value */
-    if (lane_id < length)
+    for (int base = 0; base < length; base += 32)
     {
-        reinterpret_cast<uint32_t *>(value_to_write)[offset + lane_id] = data;
+        if (lane_id + base < length)
+        {
+            reinterpret_cast<uint32_t *>(value_to_write)[offset + base + lane_id] = data;
+        }
     }
 
     /* make sure the writes are visible to all threads before updating the version */

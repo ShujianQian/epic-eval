@@ -1,4 +1,4 @@
-add_library(epic_gpu SHARED epic_gpu.cu epic_gpu.cuh gpu_allocator.cu ../gpu_execution_planner.cu
+add_library(epic_gpu SHARED epic_gpu.cu epic_gpu.cuh ../gpu_allocator.cu ../gpu_execution_planner.cu
         ../benchmarks/gpu_ycsb.cu
         ../gpu_txn_bridge.cu
         ../gpu_txn.cu

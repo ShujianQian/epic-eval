@@ -12,7 +12,7 @@
 #include <gacco/benchmarks/tpcc_txn.h>
 #include <txn.h>
 #include <util_log.h>
-#include <tpcc_config.h>
+#include "benchmarks/tpcc_config.h"
 
 #ifdef EPIC_CUDA_AVAILABLE
 

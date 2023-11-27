@@ -9,7 +9,7 @@
 #include <random>
 #include <cassert>
 
-#include <tpcc_config.h>
+#include "tpcc_config.h"
 #include <benchmarks/tpcc_txn.h>
 
 namespace epic::tpcc {

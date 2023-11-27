@@ -63,9 +63,10 @@ class TxnArray
 public:
     static constexpr size_t kBaseTxnSize = BaseTxnSize<TxnType>::value;
     void *txns = nullptr;
-    size_t num_txns;
-    DeviceType device;
+    size_t num_txns = 0;
+    DeviceType device = DeviceType::CPU;
 
+    TxnArray() = default;
     explicit TxnArray(size_t num_txns)
         : num_txns(num_txns)
         , device(DeviceType::CPU)
@@ -137,14 +138,16 @@ public:
 
         if (device == DeviceType::CPU)
         {
-            logger.Trace("Deallocating {} bytes for {} txns on CPU", formatSizeBytes(kBaseTxnSize * num_txns), num_txns);
+            logger.Trace(
+                "Deallocating {} bytes for {} txns on CPU", formatSizeBytes(kBaseTxnSize * num_txns), num_txns);
             Free(txns);
             txns = nullptr;
         }
 #ifdef EPIC_CUDA_AVAILABLE
         else if (device == DeviceType::GPU)
         {
-            logger.Trace("Deallocating {} bytes for {} txns on GPU", formatSizeBytes(kBaseTxnSize * num_txns), num_txns);
+            logger.Trace(
+                "Deallocating {} bytes for {} txns on GPU", formatSizeBytes(kBaseTxnSize * num_txns), num_txns);
             txns = destroyGpuTxnArrayStorage(txns);
         }
 #endif

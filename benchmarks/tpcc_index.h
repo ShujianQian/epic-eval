@@ -6,7 +6,7 @@
 #define EPIC_BENCHMARKS_TPCC_INDEX_H
 
 #include <txn.h>
-#include <tpcc_config.h>
+#include "tpcc_config.h"
 #include <benchmarks/tpcc_table.h>
 
 namespace epic::tpcc {

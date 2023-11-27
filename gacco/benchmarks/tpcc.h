@@ -7,8 +7,9 @@
 
 #include <vector>
 
-#include <tpcc_config.h>
 #include <txn.h>
+#include <benchmarks/benchmark.h>
+#include <benchmarks/tpcc_config.h>
 #include <benchmarks/tpcc_txn.h>
 #include <benchmarks/tpcc_index.h>
 #include <benchmarks/tpcc_table.h>
@@ -30,7 +31,7 @@ using epic::tpcc::TpccTxnParam;
 using epic::tpcc::TpccIndex;
 using epic::tpcc::TpccCpuIndex;
 
-class TpccDb
+class TpccDb : public epic::Benchmark
 {
 public:
     TpccConfig config;
@@ -59,9 +60,9 @@ public:
     std::shared_ptr<Executor> executor;
 
     explicit TpccDb(TpccConfig config);
-    void loadInitialData();
-    void generateTxns();
-    void runBenchmark();
+    void loadInitialData() override;
+    void generateTxns() override;
+    void runBenchmark() override;
 
     void indexEpoch(uint32_t epoch_id);
 };

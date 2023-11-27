@@ -9,7 +9,7 @@
 #include <util_log.h>
 #include <txn.h>
 #include <benchmarks/tpcc_txn.h>
-#include <tpcc_config.h>
+#include "tpcc_config.h"
 
 namespace epic::tpcc {
 

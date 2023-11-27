@@ -8,7 +8,7 @@
 #include <gacco/execution_planner.h>
 #include <gacco/benchmarks/tpcc_txn.h>
 #include <gacco/benchmarks/tpcc_storage.h>
-#include <tpcc_config.h>
+#include "benchmarks/tpcc_config.h"
 #include <txn.h>
 
 namespace gacco::tpcc {
