@@ -159,7 +159,7 @@ __global__ void gpuPiecewiseExecKernel(YcsbConfig config, void *records, void *v
     YcsbExecPlan *plan = reinterpret_cast<YcsbExecPlan *>(reinterpret_cast<BaseTxn *>(exec_plan_ptr)->data);
     YcsbExecPlan::Plan *piece_plan = &plan->plans[warp_piece_id];
 
-    uint32_t data;
+    uint32_t data = 0;
 
     switch (txn->ops[warp_piece_id])
     {
@@ -220,8 +220,11 @@ __global__ void gpuPiecewiseExecKernel(YcsbConfig config, void *records, void *v
         break;
     }
     default:
-        printf("Invalid op type: %s\n", YcsbOpTypeToString(txn->ops[warp_piece_id]));
         assert(false);
+    }
+    if (lane_id == leader_lane)
+    {
+        txn->record_ids[warp_piece_id] = data; /* to prevent compiler from optimizing out data read */
     }
 }
 
@@ -267,7 +270,7 @@ __global__ void gpuNoSplitPiecewiseExecKernel(YcsbConfig config, void *records, 
     YcsbRecords *records_ptr = reinterpret_cast<YcsbRecords *>(records);
     YcsbVersions *versions_ptr = reinterpret_cast<YcsbVersions *>(versions);
 
-    uint32_t data;
+    uint32_t data = 0;
 
     switch (txn->ops[warp_piece_id])
     {
@@ -310,6 +313,11 @@ __global__ void gpuNoSplitPiecewiseExecKernel(YcsbConfig config, void *records, 
     default:
         printf("Invalid op type: %s\n", YcsbOpTypeToString(txn->ops[warp_piece_id]));
         assert(false);
+    }
+
+    if (lane_id == leader_lane)
+    {
+        txn->record_ids[warp_piece_id] = data; /* to prevent compiler from optimizing out data read */
     }
 }
 

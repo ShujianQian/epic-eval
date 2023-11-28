@@ -9,6 +9,8 @@
 #include <cstddef>
 #include <cassert>
 
+#include <util_device_type.h>
+
 namespace epic::ycsb {
 
 struct YcsbConfig

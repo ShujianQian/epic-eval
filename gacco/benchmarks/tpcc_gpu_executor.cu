@@ -70,7 +70,7 @@ __device__ __forceinline__ void writeData(uint32_t *data, uint32_t size, uint32_
 __device__ __forceinline__ void gpuExecTpccTxn(epic::tpcc::TpccConfig config, TpccRecords records,
     Executor::TpccTableLocks table_locks, NewOrderTxnParams<FixedSizeTxn> *params, uint32_t txn_id)
 {
-    uint32_t data;
+    uint32_t data = 0;
     if (config.gacco_use_atomic)
     {
         WarehouseValue *warehouse_value = &records.warehouse_record[params->warehouse_id];
@@ -170,6 +170,7 @@ __device__ __forceinline__ void gpuExecTpccTxn(epic::tpcc::TpccConfig config, Tp
             releaseLock(table_locks.item, params->items[i].item_id, txn_id);
         }
     }
+    params->warehouse_id = data; /* to prevent compiler from optimizing out the txn */
 }
 
 __device__ __forceinline__ void gpuExecTpccTxn(epic::tpcc::TpccConfig config, TpccRecords records,
@@ -178,7 +179,7 @@ __device__ __forceinline__ void gpuExecTpccTxn(epic::tpcc::TpccConfig config, Tp
     WarehouseValue *warehouse_value = &records.warehouse_record[params->warehouse_id];
     DistrictValue *district_value = &records.district_record[params->district_id];
     CustomerValue *customer_value = &records.customer_record[params->customer_id];
-    uint32_t data;
+    uint32_t data = 0;
     if (config.gacco_use_atomic)
     {
         /* execute without holding locks */
@@ -213,6 +214,7 @@ __device__ __forceinline__ void gpuExecTpccTxn(epic::tpcc::TpccConfig config, Tp
         releaseLock(table_locks.district, params->district_id, txn_id);
         releaseLock(table_locks.customer, params->customer_id, txn_id);
     }
+    params->warehouse_id = data; /* to prevent compiler from optimizing out the txn */
 }
 
 __global__ void gpuExecKernel(epic::tpcc::TpccConfig config, TpccRecords records, Executor::TpccTableLocks table_locks,

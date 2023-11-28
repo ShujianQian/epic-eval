@@ -31,7 +31,8 @@ set(EPIC_CPU_SOURCE
 
 set(GACCO_CPU_SOURCE
         gacco/benchmarks/tpcc.cpp
-        gacco/benchmarks/tpcc_txn_gen.cpp)
+        gacco/benchmarks/tpcc_txn_gen.cpp
+        gacco/benchmarks/ycsb.cpp)
 
 set(EPIC_GPU_SOURCE
         gpu_src/epic_gpu.cu gpu_allocator.cu
@@ -53,7 +54,9 @@ set(EPIC_GPU_SOURCE
 set(GACCO_GPU_SOURCE
     gacco/gpu_execution_planner.cu
         gacco/benchmarks/tpcc_gpu_submitter.cu
-        gacco/benchmarks/tpcc_gpu_executor.cu)
+        gacco/benchmarks/tpcc_gpu_executor.cu
+        gacco/benchmarks/ycsb_gpu_submitter.cu
+        gacco/benchmarks/ycsb_gpu_executor.cu)
 
 if (CUDA_FOUND)
     set(EPIC_SOURCE ${EPIC_CPU_SOURCE} ${EPIC_GPU_SOURCE} ${GACCO_CPU_SOURCE} ${GACCO_GPU_SOURCE})
