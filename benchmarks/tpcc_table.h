@@ -18,6 +18,11 @@
 
 namespace epic::tpcc {
 
+/* NOTE:
+ * for ordered keys, it's important that the key fields are in reverse order of th key on x64 (little endian)
+ * so that the key can be compared by comparing the base_key
+ */
+
 union WarehouseKey
 {
     using baseType = typename ChooseBitfieldBaseType<2 * kMaxWarehouses>::type;
@@ -220,10 +225,10 @@ union OrderLineKey
     using baseType = ChooseBitfieldBaseType<10'000'000, 20, 2 * kMaxWarehouses, 15>::type;
     struct
     {
+        baseType ol_number : ceilLog2(15);
         baseType ol_o_id : ceilLog2(10'000'000);
         baseType ol_d_id : ceilLog2(20);
         baseType ol_w_id : ceilLog2(2 * kMaxWarehouses);
-        baseType ol_number : ceilLog2(15);
     };
     baseType base_key = 0;
     OrderLineKey() = default;

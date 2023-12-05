@@ -57,10 +57,11 @@ public:
 
         if (src.device == dest.device)
         {
-            if (dest.txns != nullptr)
-            {
-                dest.Destroy();
-            }
+            /* FIXME: add a relink function */
+//            if (dest.txns != nullptr)
+//            {
+//                dest.Destroy();
+//            }
             dest.txns = src.txns;
         }
         else

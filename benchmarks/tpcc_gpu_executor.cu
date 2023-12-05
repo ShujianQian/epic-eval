@@ -48,22 +48,22 @@ __device__ __forceinline__ void gpuExecTpccTxn(TpccRecords records, TpccVersions
 #endif
 
     uint32_t result;
-    gpuReadFromTableCoop(records.warehouse_record, versions.warehouse_version, params->warehouse_id, loc_record_a,
-        epoch, result, lane_id);
-    //    gpuReadFromTableCoop(records.warehouse_record, versions.warehouse_version, params->warehouse_id,
-    //        plan->warehouse_loc, epoch, result, lane_id);
-
-    gpuReadFromTableCoop(
-        records.district_record, versions.district_version, params->district_id, loc_record_a, epoch, result, lane_id);
-    //    gpuReadFromTableCoop(records.district_record, versions.district_version, params->district_id,
-    //    plan->district_loc,
+    //    gpuReadFromTableCoop(records.warehouse_record, versions.warehouse_version, params->warehouse_id, loc_record_a,
     //        epoch, result, lane_id);
+    gpuReadFromTableCoop(records.warehouse_record, versions.warehouse_version, params->warehouse_id,
+        plan->warehouse_loc, epoch, result, lane_id);
 
-    gpuReadFromTableCoop(
-        records.customer_record, versions.customer_version, params->customer_id, loc_record_a, epoch, result, lane_id);
-    //    gpuReadFromTableCoop(records.customer_record, versions.customer_version, params->customer_id,
-    //    plan->customer_loc,
-    //                         epoch, result, lane_id);
+    //    gpuReadFromTableCoop(
+    //        records.district_record, versions.district_version, params->district_id, loc_record_a, epoch, result,
+    //        lane_id);
+    gpuReadFromTableCoop(records.district_record, versions.district_version, params->district_id, plan->district_loc,
+        epoch, result, lane_id);
+
+    //    gpuReadFromTableCoop(
+    //        records.customer_record, versions.customer_version, params->customer_id, loc_record_a, epoch, result,
+    //        lane_id);
+    gpuReadFromTableCoop(records.customer_record, versions.customer_version, params->customer_id, plan->customer_loc,
+        epoch, result, lane_id);
 
     gpuWriteToTableCoop(
         records.order_record, versions.order_version, params->order_id, plan->order_loc, epoch, result, lane_id);

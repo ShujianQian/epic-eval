@@ -38,9 +38,13 @@ private:
     TxnArray<TpccTxnParam> index_output;
     TxnArray<TpccTxnParam> initialization_input;
     TxnArray<TpccExecPlan> initialization_output;
+    TxnArray<TpccTxnParam> execution_param_input;
+    TxnArray<TpccExecPlan> execution_plan_input;
 
     TxnBridge input_index_bridge;
     TxnBridge index_initialization_bridge;
+    TxnBridge index_execution_param_bridge;
+    TxnBridge initialization_execution_plan_bridge;
 
     std::shared_ptr<TpccIndex> index;
 
@@ -59,6 +63,7 @@ private:
     TpccVersions versions;
 
     std::shared_ptr<Executor> executor;
+
 public:
     explicit TpccDb(TpccConfig config);
 

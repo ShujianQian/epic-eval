@@ -33,9 +33,13 @@ public:
     TxnArray<YcsbTxnParam> index_output;
     TxnArray<YcsbTxnParam> initialization_input;
     TxnArray<YcsbExecPlan> initialization_output;
+    TxnArray<YcsbTxnParam> execution_param_input;
+    TxnArray<YcsbExecPlan> execution_plan_input;
 
     TxnBridge input_index_bridge;
     TxnBridge index_initialization_bridge;
+    TxnBridge index_execution_param_bridge;
+    TxnBridge initialization_execution_plan_bridge;
 
     std::shared_ptr<YcsbIndex> index;
     std::shared_ptr<TableExecutionPlanner> planner;

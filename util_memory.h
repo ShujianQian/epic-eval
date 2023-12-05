@@ -20,11 +20,14 @@ struct FreeDelete
 void *allocatePinnedMemory(size_t size);
 inline void *Malloc(size_t size)
 {
+    void *retval = nullptr;
 #ifdef EPIC_CUDA_AVAILABLE
-    return allocatePinnedMemory(size);
+    retval = allocatePinnedMemory(size);
 #else
-    return malloc(size);
+    retval = malloc(size);
 #endif
+    memset(retval, 0, size);
+    return retval;
 }
 
 void freePinedMemory(void *ptr);

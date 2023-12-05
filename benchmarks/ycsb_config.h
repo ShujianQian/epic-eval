@@ -44,6 +44,7 @@ struct YcsbConfig
     DeviceType execution_device = DeviceType::GPU;
     bool split_field = true;
     bool full_record_read = false;
+    uint32_t cpu_exec_num_threads = 1;
 };
 
 } // namespace epic::ycsb

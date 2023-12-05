@@ -13,6 +13,7 @@
 #include <gpu_execution_planner.h>
 #include <benchmarks/ycsb_gpu_submitter.h>
 #include <benchmarks/ycsb_gpu_executor.h>
+#include <benchmarks/ycsb_cpu_executor.h>
 
 namespace epic::ycsb {
 
@@ -23,6 +24,8 @@ YcsbBenchmark::YcsbBenchmark(YcsbConfig config)
     , index_output(config.num_txns, config.index_device)
     , initialization_input(config.num_txns, config.initialize_device, false)
     , initialization_output(config.num_txns, config.initialize_device)
+    , execution_param_input(config.num_txns, config.execution_device, false)
+    , execution_plan_input(config.num_txns, config.execution_device, false)
 {
     auto &logger = Logger::GetInstance();
     for (int i = 0; i < config.epochs; ++i)
@@ -32,6 +35,9 @@ YcsbBenchmark::YcsbBenchmark(YcsbConfig config)
     index = std::make_shared<YcsbGpuIndex>(config);
     input_index_bridge.Link(txn_array[0], index_input);
     index_initialization_bridge.Link(index_output, initialization_input);
+    index_execution_param_bridge.Link(index_output, execution_param_input);
+    initialization_execution_plan_bridge.Link(initialization_output, execution_plan_input);
+
     GpuAllocator allocator;
     planner = std::make_shared<GpuTableExecutionPlanner>(
         "planner", allocator, 0, 11 * 10, config.num_txns, config.num_records, initialization_output);
@@ -42,24 +48,58 @@ YcsbBenchmark::YcsbBenchmark(YcsbConfig config)
             planner->d_scratch_array, planner->scratch_array_bytes, planner->curr_num_ops},
         config);
 
-    if (config.split_field) {
-        size_t record_size = sizeof(YcsbFieldRecords) * config.num_records * 10;
-        records = static_cast<YcsbFieldRecords *>(allocator.Allocate(record_size));
-        logger.Info("Field-split record size: {}", formatSizeBytes(record_size));
-        size_t version_size = sizeof(YcsbFieldVersions) * config.num_records * 10;
-        versions = static_cast<YcsbFieldVersions *>(allocator.Allocate(version_size));
-        logger.Info("Field-split version size: {}", formatSizeBytes(version_size));
-    } else {
-        size_t record_size = sizeof(YcsbRecords) * config.num_records;
-        records = static_cast<YcsbRecords *>(allocator.Allocate(record_size));
-        logger.Info("Record size: {}", formatSizeBytes(record_size));
-        size_t version_size = sizeof(YcsbVersions) * config.num_records;
-        versions = static_cast<YcsbVersions *>(allocator.Allocate(version_size));
-        logger.Info("Version size: {}", formatSizeBytes(version_size));
-    }
-    allocator.PrintMemoryInfo();
+    if (config.execution_device == DeviceType::GPU)
+    {
+        if (config.split_field)
+        {
+            size_t record_size = sizeof(YcsbFieldRecords) * config.num_records * 10;
+            records = static_cast<YcsbFieldRecords *>(allocator.Allocate(record_size));
+            logger.Info("Field-split record size: {}", formatSizeBytes(record_size));
+            size_t version_size = sizeof(YcsbFieldVersions) * config.num_records * 10;
+            versions = static_cast<YcsbFieldVersions *>(allocator.Allocate(version_size));
+            logger.Info("Field-split version size: {}", formatSizeBytes(version_size));
+        }
+        else
+        {
+            size_t record_size = sizeof(YcsbRecords) * config.num_records;
+            records = static_cast<YcsbRecords *>(allocator.Allocate(record_size));
+            logger.Info("Record size: {}", formatSizeBytes(record_size));
+            size_t version_size = sizeof(YcsbVersions) * config.num_records;
+            versions = static_cast<YcsbVersions *>(allocator.Allocate(version_size));
+            logger.Info("Version size: {}", formatSizeBytes(version_size));
+        }
+        allocator.PrintMemoryInfo();
 
-    executor = std::make_shared<GpuExecutor>(records, versions, initialization_input, initialization_output, config);
+        executor =
+            std::make_shared<GpuExecutor>(records, versions, execution_param_input, execution_plan_input, config);
+        //        executor =
+        //            std::make_shared<GpuExecutor>(records, versions, initialization_input, initialization_output,
+        //            config);
+    }
+    else if (config.execution_device == DeviceType::CPU)
+    {
+        if (config.split_field)
+        {
+            throw std::runtime_error(
+                "epic::ycsb::YcsbBenchmark::YcsbBenchmark() found split field not supported on CPU.");
+        }
+        else
+        {
+            size_t record_size = sizeof(YcsbRecords) * config.num_records;
+            records = static_cast<YcsbRecords *>(Malloc(record_size));
+            logger.Info("Record size: {}", formatSizeBytes(record_size));
+            size_t version_size = sizeof(YcsbVersions) * config.num_records;
+            versions = static_cast<YcsbVersions *>(Malloc(version_size));
+            logger.Info("Version size: {}", formatSizeBytes(version_size));
+        }
+
+        executor =
+            std::make_shared<CpuExecutor>(records, versions, execution_param_input, execution_plan_input, config);
+    }
+    else
+    {
+        throw std::runtime_error("epic::ycsb::YcsbBenchmark::YcsbBenchmark() found unknown execution device.");
+    }
 }
 
 void YcsbBenchmark::loadInitialData()
@@ -197,6 +237,18 @@ void YcsbBenchmark::runBenchmark()
                 std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count());
         }
 
+        /* transfer */
+        {
+            start_time = std::chrono::high_resolution_clock::now();
+            index_execution_param_bridge.StartTransfer();
+            initialization_execution_plan_bridge.StartTransfer();
+            index_execution_param_bridge.FinishTransfer();
+            initialization_execution_plan_bridge.FinishTransfer();
+            end_time = std::chrono::high_resolution_clock::now();
+            logger.Info("Epoch {} transfer time: {} us", epoch_id,
+                        std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count());
+        }
+
         /* execution */
         {
             start_time = std::chrono::high_resolution_clock::now();
@@ -205,7 +257,7 @@ void YcsbBenchmark::runBenchmark()
 
             end_time = std::chrono::high_resolution_clock::now();
             logger.Info("Epoch {} execution time: {} us", epoch_id,
-                        std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count());
+                std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count());
         }
     }
 }

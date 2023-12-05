@@ -27,7 +27,9 @@ set(EPIC_CPU_SOURCE
         benchmarks/tpcc.cpp
         benchmarks/tpcc_index.cpp
         benchmarks/tpcc_txn_gen.cpp
-        txn_bridge.cpp)
+        txn_bridge.cpp
+        benchmarks/tpcc_cpu_executor.cpp
+        benchmarks/ycsb_cpu_executor.cpp)
 
 set(GACCO_CPU_SOURCE
         gacco/benchmarks/tpcc.cpp
