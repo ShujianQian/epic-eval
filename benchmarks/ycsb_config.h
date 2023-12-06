@@ -34,16 +34,16 @@ struct YcsbConfig
             assert(num_reads + num_writes + num_rmw + num_inserts == 100);
         }
     } txn_mix;
-    size_t num_records = 1'000'000;
+    size_t num_records = 2'500'000;
     size_t num_txns = 100'000;
-    size_t starting_num_records = 1'000'000;
+    size_t starting_num_records = 2'500'000;
     size_t epochs = 20;
     double skew_factor = 0.0;
-    DeviceType index_device = DeviceType::CPU;
+    DeviceType index_device = DeviceType::GPU;
     DeviceType initialize_device = DeviceType::GPU;
     DeviceType execution_device = DeviceType::GPU;
     bool split_field = true;
-    bool full_record_read = false;
+    bool full_record_read = true;
     uint32_t cpu_exec_num_threads = 1;
 };
 

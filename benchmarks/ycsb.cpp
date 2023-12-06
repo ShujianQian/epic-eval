@@ -194,7 +194,7 @@ void YcsbBenchmark::runBenchmark()
             input_index_bridge.StartTransfer();
             input_index_bridge.FinishTransfer();
             end_time = std::chrono::high_resolution_clock::now();
-            logger.Info("Epoch {} transfer time: {} us", epoch_id,
+            logger.Info("Epoch {} index_transfer time: {} us", epoch_id,
                 std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count());
         }
 
@@ -213,8 +213,9 @@ void YcsbBenchmark::runBenchmark()
             start_time = std::chrono::high_resolution_clock::now();
             index_initialization_bridge.StartTransfer();
             index_initialization_bridge.FinishTransfer();
+            index_execution_param_bridge.StartTransfer();
             end_time = std::chrono::high_resolution_clock::now();
-            logger.Info("Epoch {} transfer time: {} us", epoch_id,
+            logger.Info("Epoch {} init_transfer time: {} us", epoch_id,
                 std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count());
         }
 
@@ -240,12 +241,11 @@ void YcsbBenchmark::runBenchmark()
         /* transfer */
         {
             start_time = std::chrono::high_resolution_clock::now();
-            index_execution_param_bridge.StartTransfer();
             initialization_execution_plan_bridge.StartTransfer();
             index_execution_param_bridge.FinishTransfer();
             initialization_execution_plan_bridge.FinishTransfer();
             end_time = std::chrono::high_resolution_clock::now();
-            logger.Info("Epoch {} transfer time: {} us", epoch_id,
+            logger.Info("Epoch {} exec_transfer time: {} us", epoch_id,
                         std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count());
         }
 

@@ -231,7 +231,7 @@ void TpccDb::runBenchmark()
 
 #endif
             end_time = std::chrono::high_resolution_clock::now();
-            logger.Info("Epoch {} transfer time: {} us", epoch_id,
+            logger.Info("Epoch {} index_transfer time: {} us", epoch_id,
                         std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count());
         }
 
@@ -281,7 +281,7 @@ void TpccDb::runBenchmark()
             index_initialization_bridge.StartTransfer();
             index_initialization_bridge.FinishTransfer();
             end_time = std::chrono::high_resolution_clock::now();
-            logger.Info("Epoch {} transfer time: {} us", epoch_id,
+            logger.Info("Epoch {} init_transfer time: {} us", epoch_id,
                 std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count());
 
 #if 0 // DEBUG
@@ -325,6 +325,14 @@ void TpccDb::runBenchmark()
             end_time = std::chrono::high_resolution_clock::now();
             logger.Info("Epoch {} submission time: {} us", epoch_id,
                 std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count());
+        }
+
+        /* transfer */
+        {
+            start_time = std::chrono::high_resolution_clock::now();
+            end_time = std::chrono::high_resolution_clock::now();
+            logger.Info("Epoch {} exec_transfer time: {} us", epoch_id,
+                        std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count());
         }
 
         /* initialize */

@@ -32,7 +32,7 @@ struct TpccConfig
     size_t num_warehouses = 8;
     size_t order_table_size = 1'000'000;
     size_t orderline_table_size = 15'000'000;
-    DeviceType index_device = DeviceType::CPU;
+    DeviceType index_device = DeviceType::GPU;
     DeviceType initialize_device = DeviceType::GPU;
     DeviceType execution_device = DeviceType::GPU;
     bool gacco_separate_txn_queue = true;
