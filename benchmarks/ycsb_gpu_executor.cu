@@ -7,11 +7,18 @@
 #include <util_warp_memory.cuh>
 #include "gpu_storage.cuh"
 
+#define EPIC_SINGLE_THREAD_EXEC
+#undef EPIC_SINGLE_THREAD_EXEC
+
 namespace epic::ycsb {
 
 namespace {
 
+#ifndef EPIC_SINGLE_THREAD_EXEC
 constexpr uint32_t block_size = 128;
+#else
+constexpr uint32_t block_size = 1024;
+#endif
 constexpr uint32_t num_warps = block_size / kDeviceWarpSize;
 
 __device__ uint32_t txn_counter = 0; /* used for scheduling txns among threads */
@@ -321,6 +328,88 @@ __global__ void gpuNoSplitPiecewiseExecKernel(YcsbConfig config, void *records, 
     }
 }
 
+__global__ void gpuNoSplitThreadPiecewiseExecKernel(YcsbConfig config, void *records, void *versions, GpuTxnArray txns,
+    GpuTxnArray plans, uint32_t num_txns, uint32_t epoch)
+{
+    __shared__ uint32_t block_counter;
+
+    uint32_t thread_id = threadIdx.x;
+    uint32_t lane_id = threadIdx.x % kDeviceWarpSize;
+    /* one thread loads txn id for the entire warp */
+    if (threadIdx.x == 0)
+    {
+        block_counter = atomicAdd(&txn_counter, block_size);
+    }
+
+    __syncthreads();
+    /* warp cooperative execution afterward */
+
+    uint32_t thread_piece_id;
+    thread_piece_id = atomicAdd(&block_counter, 1);
+    if (thread_piece_id >= num_txns * 10)
+    {
+        return;
+    }
+
+    uint32_t thread_txn_id = thread_piece_id / 10;
+    thread_piece_id = thread_piece_id % 10;
+
+    BaseTxn *txn_param_ptr = txns.getTxn(thread_txn_id);
+    BaseTxn *exec_plan_ptr = plans.getTxn(thread_txn_id);
+    YcsbTxnParam *txn = reinterpret_cast<YcsbTxnParam *>(reinterpret_cast<BaseTxn *>(txn_param_ptr)->data);
+    YcsbExecPlan *plan = reinterpret_cast<YcsbExecPlan *>(reinterpret_cast<BaseTxn *>(exec_plan_ptr)->data);
+    YcsbExecPlan::Plan *piece_plan = &plan->plans[thread_piece_id];
+
+    YcsbRecords *records_ptr = reinterpret_cast<YcsbRecords *>(records);
+    YcsbVersions *versions_ptr = reinterpret_cast<YcsbVersions *>(versions);
+
+    uint32_t data = 0;
+
+    switch (txn->ops[thread_piece_id])
+    {
+    case YcsbOpType::READ: {
+        uint32_t record_id = txn->record_ids[thread_piece_id];
+        gpuReadFromTableThread(records_ptr, versions_ptr, record_id, plan->plans[thread_piece_id].read_plan.read_loc,
+            epoch, data, sizeof(YcsbValue::data[0]) / sizeof(uint32_t) * txn->field_ids[thread_piece_id],
+            sizeof(YcsbValue::data[0]) / sizeof(uint32_t));
+        break;
+    }
+    case YcsbOpType::FULL_READ: {
+        uint32_t record_id = txn->record_ids[thread_piece_id];
+        gpuReadFromTableThread(
+            records_ptr, versions_ptr, record_id, plan->plans[thread_piece_id].read_plan.read_loc, epoch, data);
+        break;
+    }
+    case YcsbOpType::UPDATE: {
+        uint32_t record_id = txn->record_ids[thread_piece_id];
+        gpuReadFromTableThread(
+            records_ptr, versions_ptr, record_id, plan->plans[thread_piece_id].copy_update_plan.read_loc, epoch, data);
+        gpuWriteToTableThread(
+            records_ptr, versions_ptr, record_id, plan->plans[thread_piece_id].copy_update_plan.write_loc, epoch, data);
+        break;
+    }
+    case YcsbOpType::READ_MODIFY_WRITE:
+    case YcsbOpType::FULL_READ_MODIFY_WRITE: {
+        uint32_t record_id = txn->record_ids[thread_piece_id];
+        gpuReadFromTableThread(records_ptr, versions_ptr, record_id,
+            plan->plans[thread_piece_id].read_modify_write_plan.read_loc, epoch, data);
+        gpuWriteToTableThread(records_ptr, versions_ptr, record_id,
+            plan->plans[thread_piece_id].read_modify_write_plan.write_loc, epoch, data);
+        break;
+    }
+    case YcsbOpType::INSERT: {
+        uint32_t record_id = txn->record_ids[thread_piece_id];
+        gpuWriteToTableThread(
+            records_ptr, versions_ptr, record_id, plan->plans[thread_piece_id].insert_plan.write_loc, epoch, data);
+        break;
+    }
+    default:
+        printf("Invalid op type: %s\n", YcsbOpTypeToString(txn->ops[thread_piece_id]));
+        assert(false);
+    }
+    txn->record_ids[thread_piece_id] = data; /* to prevent compiler from optimizing out data read */
+}
+
 } // namespace
 
 void GpuExecutor::execute(uint32_t epoch)
@@ -328,6 +417,7 @@ void GpuExecutor::execute(uint32_t epoch)
     /* clear the txn_counter */
     gpu_err_check(cudaMemcpyToSymbol(txn_counter, &zero, sizeof(uint32_t)));
 
+#ifndef EPIC_SINGLE_THREAD_EXEC
     uint32_t num_blocks = (config.num_txns * 10 * kDeviceWarpSize + block_size - 1) / block_size;
     if (config.split_field)
     {
@@ -343,6 +433,13 @@ void GpuExecutor::execute(uint32_t epoch)
             reinterpret_cast<void *>(std::get<YcsbVersions *>(versions)), GpuTxnArray(txn), GpuTxnArray(plan),
             config.num_txns, epoch);
     }
+#else
+    uint32_t num_blocks = (config.num_txns * 10 + block_size - 1) / block_size;
+    gpuNoSplitThreadPiecewiseExecKernel<<<num_blocks, block_size>>>(config,
+        reinterpret_cast<void *>(std::get<YcsbRecords *>(records)),
+        reinterpret_cast<void *>(std::get<YcsbVersions *>(versions)), GpuTxnArray(txn), GpuTxnArray(plan),
+        config.num_txns, epoch);
+#endif
 
     gpu_err_check(cudaPeekAtLastError());
     gpu_err_check(cudaDeviceSynchronize());
