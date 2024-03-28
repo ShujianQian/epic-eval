@@ -14,6 +14,7 @@
 #include <benchmarks/ycsb_gpu_submitter.h>
 #include <benchmarks/ycsb_gpu_executor.h>
 #include <benchmarks/ycsb_cpu_executor.h>
+#include <benchmarks/ycsb_pver_copyer.h>
 
 namespace epic::ycsb {
 
@@ -140,18 +141,21 @@ void YcsbBenchmark::generateTxns()
     for (size_t epoch = 0; epoch < config.epochs; ++epoch)
     {
         logger.Info("Generating epoch {}", epoch);
-        for (size_t i = 0; i < config.num_txns; ++i)
+        uint32_t num_contended = 0;
+        for (size_t txn_idx = 0; txn_idx < config.num_txns; ++txn_idx)
         {
-            BaseTxn *base_txn = txn_array[epoch].getTxn(i);
-            uint32_t timestamp = epoch * config.num_txns + i;
+            BaseTxn *base_txn = txn_array[epoch].getTxn(txn_idx);
+            uint32_t timestamp = epoch * config.num_txns + txn_idx;
             YcsbTxn *txn = reinterpret_cast<YcsbTxn *>(base_txn->data);
-            for (int i = 0; i < config.num_ops_per_txn; ++i)
+            constexpr uint32_t contended_threshold = 36;
+//            constexpr uint32_t contended_threshold = 1700;
+            for (int piece_idx = 0; piece_idx < config.num_ops_per_txn; ++piece_idx)
             {
                 int percentage = percentage_gen(gen);
-                txn->ops[i] = getOpType(percentage);
-                if (txn->ops[i] == YcsbOpType::INSERT)
+                txn->ops[piece_idx] = getOpType(percentage);
+                if (txn->ops[piece_idx] == YcsbOpType::INSERT)
                 {
-                    txn->keys[i] = max_existing_record;
+                    txn->keys[piece_idx] = max_existing_record;
                     ++max_existing_record;
                     continue;
                 }
@@ -161,22 +165,67 @@ void YcsbBenchmark::generateTxns()
                 {
                     do
                     {
-                        txn->keys[i] = zipf.next();
-                    } while (txn->keys[i] >= max_existing_record);
+                        txn->keys[piece_idx] = zipf.next();
+                    } while (txn->keys[piece_idx] >= max_existing_record);
                     retry = false;
-                    for (int j = 0; j < i; ++j)
+#define EPIC_PACKED_TXN_GEN
+//#undef EPIC_PACKED_TXN_GEN
+#ifdef EPIC_PACKED_TXN_GEN
+                    int epoch_piece_idx = txn_idx * config.num_ops_per_txn + piece_idx;
+                    if ((epoch_piece_idx / 4) % 4 == 0)
                     {
-                        if (txn->keys[i] == txn->keys[j])
+                        retry |= txn->keys[piece_idx] >= contended_threshold;
+                    } else {
+                        retry |= txn->keys[piece_idx] < contended_threshold;
+                    }
+#endif
+                    for (int j = 0; j < piece_idx; ++j)
+                    {
+                        if (txn->keys[piece_idx] == txn->keys[j])
                         {
                             retry = true;
                             break;
                         }
                     }
                 } while (retry);
-                txn->fields[i] = field_gen(gen);
+                if (txn->keys[piece_idx] < contended_threshold) {
+                    ++num_contended;
+                }
+                txn->fields[piece_idx] = field_gen(gen);
             }
         }
+        logger.Info("Epoch {} num_100: {}", epoch, num_contended);
     }
+
+#if 1 // Print Txn Key Hist
+    {
+        uint32_t key_hist[32]{};
+
+        const uint32_t epoch = 0;
+        for (size_t txn_idx = 0; txn_idx < config.num_txns; ++txn_idx)
+        {
+            BaseTxn *base_txn = txn_array[epoch].getTxn(txn_idx);
+            YcsbTxn *txn = reinterpret_cast<YcsbTxn *>(base_txn->data);
+            for (int piece_idx = 0; piece_idx < config.num_ops_per_txn; ++piece_idx)
+            {
+                uint32_t key = txn->keys[piece_idx];
+                uint32_t idx = 0;
+                uint32_t mult = 1;
+                while (key >= mult)
+                {
+                    ++idx;
+                    mult *= 2;
+                }
+                ++key_hist[idx];
+            }
+        }
+        for (uint32_t i = 0; i < 30; ++i)
+        {
+            logger.Info("key_hist[{}-{}]: {}", (1<<i) / 2, 1<<i, key_hist[i]);
+        }
+    }
+
+#endif
 }
 void YcsbBenchmark::runBenchmark()
 {
@@ -246,18 +295,39 @@ void YcsbBenchmark::runBenchmark()
             initialization_execution_plan_bridge.FinishTransfer();
             end_time = std::chrono::high_resolution_clock::now();
             logger.Info("Epoch {} exec_transfer time: {} us", epoch_id,
-                        std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count());
+                std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count());
         }
 
         /* execution */
         {
             start_time = std::chrono::high_resolution_clock::now();
 
-            executor->execute(epoch_id);
+            executor->execute(epoch_id, planner->d_pver_sync_expect, planner->d_pver_sync_counter);
 
             end_time = std::chrono::high_resolution_clock::now();
             logger.Info("Epoch {} execution time: {} us", epoch_id,
                 std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count());
+        }
+
+        /* pver copy */
+        {
+            if (config.use_copy_single_version)
+            {
+                start_time = std::chrono::high_resolution_clock::now();
+                copyYcsbPver(std::get<YcsbRecords *>(records), std::get<YcsbVersions *>(versions),
+                    static_cast<op_t *>(planner->d_permenant_version_rids), nullptr, planner->curr_num_ops);
+                end_time = std::chrono::high_resolution_clock::now();
+                logger.Info("Epoch {} copy pver time: {} us", epoch_id,
+                    std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count());
+            }
+        }
+
+        /* sync single version */
+        {
+            /* print sync timing stats */
+            logger.Info("Epoch {} sync single version stats:", epoch_id);
+            executor->printStat();
+
         }
     }
 }

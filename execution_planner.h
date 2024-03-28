@@ -48,6 +48,13 @@ constexpr op_t write_op = 0x1ull;
 constexpr uint32_t loc_record_a = std::numeric_limits<uint32_t>::max();
 constexpr uint32_t loc_record_b = std::numeric_limits<uint32_t>::max() - 1;
 
+enum class PVerType : uint8_t
+{
+    DUAL_VERS,
+    SINGLE_VER_COPY,
+    SINGLE_VER_SYNC
+};
+
 class TableExecutionPlanner
 {
 public:
@@ -57,7 +64,13 @@ public:
     void *d_scratch_array = nullptr;
     size_t scratch_array_bytes = 0;
     uint32_t curr_num_ops = 0;
-
+    PVerType pver_type = PVerType::SINGLE_VER_SYNC;
+    /* for pver copy */
+    void *d_permenant_version_rids = nullptr;
+    uint32_t h_num_copy_pver = 0;
+    /* for pver sync */
+    uint32_t *d_pver_sync_expect = nullptr;
+    uint32_t *d_pver_sync_counter = nullptr;
 
     virtual ~TableExecutionPlanner() = default;
     virtual void Initialize() = 0;

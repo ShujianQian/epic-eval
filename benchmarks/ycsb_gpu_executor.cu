@@ -6,6 +6,9 @@
 #include <gpu_txn.cuh>
 #include <util_warp_memory.cuh>
 #include "gpu_storage.cuh"
+#include <util_gpu.cuh>
+#include <numeric>
+#include <algorithm>
 
 #define EPIC_SINGLE_THREAD_EXEC
 #undef EPIC_SINGLE_THREAD_EXEC
@@ -23,6 +26,13 @@ constexpr uint32_t num_warps = block_size / kDeviceWarpSize;
 
 __device__ uint32_t txn_counter = 0; /* used for scheduling txns among threads */
 const uint32_t zero = 0;
+
+__device__ uint64_t read_sync_times[1000'000];
+__device__ uint64_t write_sync_times[1000'000];
+__device__ uint64_t start_times[1000'000];
+__device__ uint64_t finish_times[1000'000];
+__device__ uint64_t perSMClocks[128];
+__device__ uint64_t perSMClocks2[128];
 
 __device__ char *op_str[] = {"READ", "FULL_READ", "UPDATE", "READ_MODIFY_WRITE", "FULL_READ_MODIFY_WRITE", "INSERT"};
 
@@ -236,7 +246,8 @@ __global__ void gpuPiecewiseExecKernel(YcsbConfig config, void *records, void *v
 }
 
 __global__ void gpuNoSplitPiecewiseExecKernel(YcsbConfig config, void *records, void *versions, GpuTxnArray txns,
-    GpuTxnArray plans, uint32_t num_txns, uint32_t epoch)
+    GpuTxnArray plans, uint32_t num_txns, uint32_t epoch, bool sync_pver = false,
+    uint32_t *pver_sync_expected = nullptr, uint32_t *pver_sync_counter = nullptr)
 {
     constexpr uint32_t leader_lane = 0;
     constexpr uint32_t all_lanes_mask = 0xffffffffu;
@@ -278,6 +289,11 @@ __global__ void gpuNoSplitPiecewiseExecKernel(YcsbConfig config, void *records, 
     YcsbVersions *versions_ptr = reinterpret_cast<YcsbVersions *>(versions);
 
     uint32_t data = 0;
+    uint64_t read_sync_time = 0;
+    uint64_t write_sync_time = 0;
+    uint64_t start_time, end_time;
+
+    start_time = get_clock64();
 
     switch (txn->ops[warp_piece_id])
     {
@@ -286,18 +302,49 @@ __global__ void gpuNoSplitPiecewiseExecKernel(YcsbConfig config, void *records, 
         gpuReadFromTableCoop(records_ptr, versions_ptr, record_id, plan->plans[warp_piece_id].read_plan.read_loc, epoch,
             data, lane_id, sizeof(YcsbValue::data[0]) / sizeof(uint32_t) * txn->field_ids[warp_piece_id],
             sizeof(YcsbValue::data[0]) / sizeof(uint32_t));
+        if (sync_pver)
+        {
+            uint64_t start, end;
+            asm volatile("mov.u64 %0, %clock64;" : "=l"(start));
+            gpuSyncRecordARead(record_id, plan->plans[warp_piece_id].read_plan.read_loc, pver_sync_counter, lane_id);
+            asm volatile("mov.u64 %0, %clock64;" : "=l"(end));
+            read_sync_time += end - start;
+        }
         break;
     }
     case YcsbOpType::FULL_READ: {
         uint32_t record_id = txn->record_ids[warp_piece_id];
         gpuReadFromTableCoop(
             records_ptr, versions_ptr, record_id, plan->plans[warp_piece_id].read_plan.read_loc, epoch, data, lane_id);
+        if (sync_pver)
+        {
+            uint64_t start, end;
+            asm volatile("mov.u64 %0, %clock64;" : "=l"(start));
+            gpuSyncRecordARead(record_id, plan->plans[warp_piece_id].read_plan.read_loc, pver_sync_counter, lane_id);
+            asm volatile("mov.u64 %0, %clock64;" : "=l"(end));
+            read_sync_time += end - start;
+        }
         break;
     }
     case YcsbOpType::UPDATE: {
         uint32_t record_id = txn->record_ids[warp_piece_id];
         gpuReadFromTableCoop(records_ptr, versions_ptr, record_id, plan->plans[warp_piece_id].copy_update_plan.read_loc,
             epoch, data, lane_id);
+        if (sync_pver)
+        {
+            uint64_t start, end;
+            asm volatile("mov.u64 %0, %clock64;" : "=l"(start));
+            gpuSyncRecordARead(
+                record_id, plan->plans[warp_piece_id].copy_update_plan.read_loc, pver_sync_counter, lane_id);
+            asm volatile("mov.u64 %0, %clock64;" : "=l"(end));
+            read_sync_time += end - start;
+
+            asm volatile("mov.u64 %0, %clock64;" : "=l"(start));
+            gpuSyncRecordBRW(record_id, plan->plans[warp_piece_id].copy_update_plan.write_loc, pver_sync_expected,
+                pver_sync_counter, lane_id);
+            asm volatile("mov.u64 %0, %clock64;" : "=l"(end));
+            write_sync_time += end - start;
+        }
         gpuWriteToTableCoop(records_ptr, versions_ptr, record_id, plan->plans[warp_piece_id].copy_update_plan.write_loc,
             epoch, data, lane_id);
         break;
@@ -307,12 +354,36 @@ __global__ void gpuNoSplitPiecewiseExecKernel(YcsbConfig config, void *records, 
         uint32_t record_id = txn->record_ids[warp_piece_id];
         gpuReadFromTableCoop(records_ptr, versions_ptr, record_id,
             plan->plans[warp_piece_id].read_modify_write_plan.read_loc, epoch, data, lane_id);
+        if (sync_pver)
+        {
+            uint64_t start, end;
+            asm volatile("mov.u64 %0, %clock64;" : "=l"(start));
+            gpuSyncRecordARead(
+                record_id, plan->plans[warp_piece_id].read_modify_write_plan.read_loc, pver_sync_counter, lane_id);
+            asm volatile("mov.u64 %0, %clock64;" : "=l"(end));
+            read_sync_time += end - start;
+
+            asm volatile("mov.u64 %0, %clock64;" : "=l"(start));
+            gpuSyncRecordBRW(record_id, plan->plans[warp_piece_id].read_modify_write_plan.write_loc, pver_sync_expected,
+                pver_sync_counter, lane_id);
+            asm volatile("mov.u64 %0, %clock64;" : "=l"(end));
+            write_sync_time += end - start;
+        }
         gpuWriteToTableCoop(records_ptr, versions_ptr, record_id,
             plan->plans[warp_piece_id].read_modify_write_plan.write_loc, epoch, data, lane_id);
         break;
     }
     case YcsbOpType::INSERT: {
         uint32_t record_id = txn->record_ids[warp_piece_id];
+        if (sync_pver)
+        {
+            uint64_t start, end;
+            asm volatile("mov.u64 %0, %clock64;" : "=l"(start));
+            gpuSyncRecordBRW(record_id, plan->plans[warp_piece_id].insert_plan.write_loc, pver_sync_expected,
+                pver_sync_counter, lane_id);
+            asm volatile("mov.u64 %0, %clock64;" : "=l"(end));
+            write_sync_time += end - start;
+        }
         gpuWriteToTableCoop(records_ptr, versions_ptr, record_id, plan->plans[warp_piece_id].insert_plan.write_loc,
             epoch, data, lane_id);
         break;
@@ -322,9 +393,24 @@ __global__ void gpuNoSplitPiecewiseExecKernel(YcsbConfig config, void *records, 
         assert(false);
     }
 
+    end_time = get_clock64();
+
     if (lane_id == leader_lane)
     {
         txn->record_ids[warp_piece_id] = data; /* to prevent compiler from optimizing out data read */
+        uint32_t stat_idx = warp_txn_id * 10 + warp_piece_id;
+        write_sync_times[stat_idx] = write_sync_time;
+        read_sync_times[stat_idx] = read_sync_time;
+
+        uint32_t smid = get_smid();
+        start_times[stat_idx] = start_time - perSMClocks[smid];
+        finish_times[stat_idx] = end_time - perSMClocks2[smid];
+
+        //        __threadfence();
+        //        if (read_sync_time || write_sync_time) {
+        //                printf("txn[%05u][%u] read_sync_time[%lu] write_sync_time[%lu]\n", warp_txn_id, warp_piece_id,
+        //                read_sync_times[warp_piece_id], write_sync_times[warp_piece_id]);
+        //        }
     }
 }
 
@@ -410,9 +496,38 @@ __global__ void gpuNoSplitThreadPiecewiseExecKernel(YcsbConfig config, void *rec
     txn->record_ids[thread_piece_id] = data; /* to prevent compiler from optimizing out data read */
 }
 
+__global__ void recordPerSMClock()
+{
+    /* only one thread per block records the clock */
+    if (threadIdx.x != 0)
+    {
+        return;
+    }
+
+    uint32_t smid = get_smid();
+    unsigned long long *perSMClock = reinterpret_cast<unsigned long long *>(&perSMClocks[smid]);
+
+    unsigned long long ts = get_clock64();
+    atomicMax(perSMClock, ts);
+}
+
+__global__ void recordPerSMClock2()
+{
+    /* only one thread per block records the clock */
+    if (threadIdx.x != 0)
+    {
+        return;
+    }
+
+    uint32_t smid = get_smid();
+    unsigned long long *perSMClock = reinterpret_cast<unsigned long long *>(&perSMClocks2[smid]);
+
+    unsigned long long ts = get_clock64();
+    atomicMax(perSMClock, ts);
+}
 } // namespace
 
-void GpuExecutor::execute(uint32_t epoch)
+void GpuExecutor::execute(uint32_t epoch, uint32_t *pver_sync_expected, uint32_t *pver_sync_counter)
 {
     /* clear the txn_counter */
     gpu_err_check(cudaMemcpyToSymbol(txn_counter, &zero, sizeof(uint32_t)));
@@ -428,10 +543,12 @@ void GpuExecutor::execute(uint32_t epoch)
     }
     else
     {
+        recordPerSMClock2<<<640, 128>>>();
+        recordPerSMClock<<<640, 128>>>();
         gpuNoSplitPiecewiseExecKernel<<<num_blocks, block_size>>>(config,
             reinterpret_cast<void *>(std::get<YcsbRecords *>(records)),
             reinterpret_cast<void *>(std::get<YcsbVersions *>(versions)), GpuTxnArray(txn), GpuTxnArray(plan),
-            config.num_txns, epoch);
+            config.num_txns, epoch, false, pver_sync_expected, pver_sync_counter);
     }
 #else
     uint32_t num_blocks = (config.num_txns * 10 + block_size - 1) / block_size;
@@ -443,6 +560,188 @@ void GpuExecutor::execute(uint32_t epoch)
 
     gpu_err_check(cudaPeekAtLastError());
     gpu_err_check(cudaDeviceSynchronize());
+
+#if 0 // SYNC_STAT
+    {
+        uint32_t *h_read_sync_expected = new uint32_t[2500000];
+        gpu_err_check(
+            cudaMemcpy(h_read_sync_expected, pver_sync_expected, sizeof(uint32_t) * 2500000, cudaMemcpyDeviceToHost));
+
+        uint32_t read_sync_expected_hist[64]{};
+        for (int i = 0; i < config.num_txns * 10; ++i)
+        {
+            uint32_t mult = 1;
+            uint32_t index = 0;
+            while (h_read_sync_expected[i] >= mult && index < 20)
+            {
+                mult <<= 1;
+                ++index;
+            }
+            ++read_sync_expected_hist[index];
+        }
+
+        Logger::GetInstance().Info("Read sync expected histogram:");
+        for (int i = 0; i < 20; ++i)
+        {
+            Logger::GetInstance().Info("{}-{}: {}", (1 << i) >> 1, 1 << i, read_sync_expected_hist[i]);
+        }
+
+        delete[] h_read_sync_expected;
+    }
+#endif
+}
+
+void GpuExecutor::printStat() const
+{
+    //    uint64_t *h_read_sync_times = new uint64_t[config.num_txns * 10];
+    //    uint64_t *h_write_sync_times = new uint64_t[config.num_txns * 10];
+    uint64_t *h_read_sync_times = nullptr, *h_write_sync_times = nullptr, *h_start_times = nullptr,
+             *h_finish_times = nullptr;
+    gpu_err_check(cudaMallocHost(&h_read_sync_times, sizeof(uint64_t) * config.num_txns * 10));
+    gpu_err_check(cudaMallocHost(&h_write_sync_times, sizeof(uint64_t) * config.num_txns * 10));
+    gpu_err_check(cudaMallocHost(&h_start_times, sizeof(uint64_t) * config.num_txns * 10));
+    gpu_err_check(cudaMallocHost(&h_finish_times, sizeof(uint64_t) * config.num_txns * 10));
+
+    auto &logger = Logger::GetInstance();
+
+    gpu_err_check(cudaMemcpyFromSymbol(h_read_sync_times, read_sync_times, sizeof(uint64_t) * config.num_txns * 10));
+    gpu_err_check(cudaMemcpyFromSymbol(h_write_sync_times, write_sync_times, sizeof(uint64_t) * config.num_txns * 10));
+    gpu_err_check(cudaMemcpyFromSymbol(h_start_times, start_times, sizeof(uint64_t) * config.num_txns * 10));
+    gpu_err_check(cudaMemcpyFromSymbol(h_finish_times, finish_times, sizeof(uint64_t) * config.num_txns * 10));
+    gpu_err_check(cudaDeviceSynchronize());
+
+    uint64_t min_start_time = std::reduce(
+        h_start_times, h_start_times + config.num_txns * 10, UINT64_MAX, [](auto a, auto b) { return std::min(a, b); });
+    std::transform(h_start_times, h_start_times + config.num_txns * 10, h_start_times,
+        [min_start_time](auto a) { return a - min_start_time; });
+    std::transform(h_finish_times, h_finish_times + config.num_txns * 10, h_finish_times,
+        [min_start_time](auto a) { return a - min_start_time; });
+
+    /* print histogram of read sync times */
+    uint32_t read_sync_hist[64]{}, write_sync_hist[64]{};
+    uint32_t start_time_hist[64]{}, finish_time_hist[64]{};
+    uint32_t execution_time_hist[64]{};
+    uint32_t execution_time_linear_hist[256]{};
+
+    for (int i = 0; i < config.num_txns * 10; ++i)
+    {
+        uint64_t mult = 1;
+        uint32_t index = 0;
+        while (h_write_sync_times[i] > mult && index < 20)
+        {
+            mult <<= 1;
+            ++index;
+        }
+        ++write_sync_hist[index];
+
+        mult = 1;
+        index = 0;
+        while (h_read_sync_times[i] > mult && index < 20)
+        {
+            mult <<= 1;
+            ++index;
+        }
+        ++read_sync_hist[index];
+
+        mult = 1;
+        index = 0;
+        while (h_start_times[i] > mult && index < 29)
+        {
+            mult <<= 1;
+            ++index;
+        }
+        ++start_time_hist[index];
+
+        mult = 1;
+        index = 0;
+        while (h_finish_times[i] > mult && index < 29)
+        {
+            mult <<= 1;
+            ++index;
+        }
+        ++finish_time_hist[index];
+
+        mult = 1;
+        index = 0;
+        while (h_finish_times[i] - h_start_times[i] > mult && index < 29)
+        {
+            mult <<= 1;
+            ++index;
+        }
+        ++execution_time_hist[index];
+
+        index = 0;
+        while (h_finish_times[i] - h_start_times[i] > (index + 1) * 1000 && index < 255)
+        {
+            ++index;
+        }
+        ++execution_time_linear_hist[index];
+    }
+
+    logger.Info("Read sync times histogram:");
+    for (int i = 0; i < 20; ++i)
+    {
+        logger.Info("{}-{}: {}", 1 << i >> 1, 1 << (i + 1) >> 1, read_sync_hist[i]);
+    }
+
+    logger.Info("Write sync times histogram:");
+    for (int i = 0; i < 20; ++i)
+    {
+        logger.Info("{}-{}: {}", 1 << i >> 1, 1 << (i + 1) >> 1, write_sync_hist[i]);
+    }
+
+    logger.Info("Start times histogram:");
+    for (int i = 0; i < 30; ++i)
+    {
+        logger.Info("{}-{}: {}", 1 << i >> 1, 1 << (i + 1) >> 1, start_time_hist[i]);
+    }
+
+    logger.Info("Finish times histogram:");
+    for (int i = 0; i < 30; ++i)
+    {
+        logger.Info("{}-{}: {}", 1 << i >> 1, 1 << (i + 1) >> 1, finish_time_hist[i]);
+    }
+
+    logger.Info("Execution times histogram:");
+    for (int i = 0; i < 30; ++i)
+    {
+        logger.Info("{}-{}: {}", 1 << i >> 1, 1 << (i + 1) >> 1, execution_time_hist[i]);
+    }
+
+    logger.Info("Execution times linear histogram:");
+    for (int i = 0; i < 256; ++i)
+    {
+        logger.Info("{}-{}: {}", i * 1000, (i + 1) * 1000, execution_time_linear_hist[i]);
+    }
+
+    /* print per SM clock */
+    {
+
+        uint64_t *h_perSMClocks = new uint64_t[128];
+        uint64_t *h_perSMClocks2 = new uint64_t[128];
+        gpu_err_check(cudaMemcpyFromSymbol(h_perSMClocks, perSMClocks, sizeof(uint64_t) * 128));
+        gpu_err_check(cudaMemcpyFromSymbol(h_perSMClocks2, perSMClocks2, sizeof(uint64_t) * 128));
+        for (int i = 0; i < 90; ++i)
+        {
+            logger.Info(
+                "SM[{}]: {} {} {}", i, h_perSMClocks2[i], h_perSMClocks[i], h_perSMClocks[i] - h_perSMClocks2[i]);
+        }
+    }
+
+    int device;
+    gpu_err_check(cudaGetDevice(&device));
+
+    struct cudaDeviceProp prop;
+    gpu_err_check(cudaGetDeviceProperties(&prop, device));
+    logger.Info("GPU frequency: {} MHz", prop.clockRate / 1000.0);
+    logger.Info("SM count: {}", prop.multiProcessorCount);
+
+    //    delete[] h_read_sync_times;
+    //    delete[] h_write_sync_times;
+    gpu_err_check(cudaFreeHost(h_read_sync_times));
+    gpu_err_check(cudaFreeHost(h_write_sync_times));
+    gpu_err_check(cudaFreeHost(h_start_times));
+    gpu_err_check(cudaFreeHost(h_finish_times));
 }
 
 } // namespace epic::ycsb

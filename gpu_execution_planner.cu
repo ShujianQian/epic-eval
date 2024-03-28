@@ -5,12 +5,14 @@
 #include "gpu_execution_planner.h"
 
 #include <cub/cub.cuh>
+#include <thrust/functional.h>
 
 #include "util_math.h"
 #include "util_log.h"
 #include "util_arch.h"
 #include "util_gpu_error_check.cuh"
 #include "util_cub_reverse_iterator.cuh"
+#include <util_gpu.cuh>
 
 namespace epic {
 
@@ -62,6 +64,29 @@ void GpuTableExecutionPlanner::Initialize()
     scratch_array_bytes = std::max(4 * max_num_ops * sizeof(op_t), 2048lu);
     allocateDeviceArray(allocator, d_scratch_array, scratch_array_bytes, "scratch array", total_allocated_size);
 
+    if (pver_type == PVerType::SINGLE_VER_COPY)
+    {
+        allocateDeviceArray(allocator, d_permenant_version_rids, max_num_ops * sizeof(uint64_t), "pver copy array",
+            total_allocated_size);
+        allocateDeviceArray(allocator, reinterpret_cast<void *&>(d_num_copy_pver), sizeof(uint32_t), "num copy pver",
+            total_allocated_size);
+    }
+
+    if (pver_type == PVerType::SINGLE_VER_SYNC)
+    {
+        const size_t sync_arr_size = max_num_records * sizeof(uint32_t);
+        allocateDeviceArray(allocator, reinterpret_cast<void *&>(d_pver_sync_expect), sync_arr_size,
+            "pver sync expected array", total_allocated_size);
+        allocateDeviceArray(allocator, reinterpret_cast<void *&>(d_pver_sync_counter), sync_arr_size,
+            "pver sync counter array", total_allocated_size);
+        allocateDeviceArray(allocator, reinterpret_cast<void *&>(d_num_sync_expected), sizeof(uint32_t),
+            "num pver sync expected", total_allocated_size);
+        allocateDeviceArray(allocator, reinterpret_cast<void *&>(d_sync_row_ids), max_num_ops * sizeof(uint32_t),
+            "pver sync row ids", total_allocated_size);
+        allocateDeviceArray(allocator, reinterpret_cast<void *&>(d_sync_expected_temp), max_num_ops * sizeof(uint32_t),
+            "pver sync expected temp", total_allocated_size);
+    }
+
     logger.Info("Total allocated size for {}: {}", name, formatSizeBytes(total_allocated_size));
 
     cudaStream_t stream;
@@ -93,6 +118,29 @@ struct VersionWriteExtractor
         return op == OperationT::VERSION_WRITE;
     }
 };
+
+struct ShouldCopySingleVer
+{
+    __host__ __device__ __forceinline__ bool operator()(OperationT op) const
+    {
+        return op == OperationT::RECORD_B_WRITE;
+    }
+};
+struct RowIdExtractor
+{
+    __host__ __device__ __forceinline__ uint32_t operator()(op_t op) const
+    {
+        return GET_RECORD_ID(op);
+    }
+};
+struct IsRecordARead
+{
+    __host__ __device__ __forceinline__ uint32_t operator()(OperationT op) const
+    {
+        return op == OperationT::RECORD_A_READ;
+    }
+};
+
 template<typename OpInputIt, typename WBeforeInputIt, typename WAfterInputIt, typename OutputIt>
 __global__ void calcOperationType(
     OpInputIt op_input_it, WBeforeInputIt w_before, WAfterInputIt w_after, OutputIt output, size_t size)
@@ -169,6 +217,17 @@ __global__ void scatterRWLocation(op_t *sorted_ops, OperationT *op_types, uint32
         reinterpret_cast<BaseTxn *>(static_cast<uint8_t *>(initialize_output) + txn_id * base_txn_size)->data);
     txn_base_ptr[offset] = rw_location;
 }
+__global__ void scatterPverSyncExpected(
+    uint32_t *sync_row_ids, uint32_t *sync_expected_temp, uint32_t *d_num_sync_expected, uint32_t *d_pver_sync_expected)
+{
+    uint32_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= *d_num_sync_expected)
+    {
+        return;
+    }
+    uint32_t row_id = sync_row_ids[idx];
+    d_pver_sync_expected[row_id] = sync_expected_temp[idx];
+};
 } // namespace
 
 void GpuTableExecutionPlanner::InitializeExecutionPlan()
@@ -268,6 +327,37 @@ void GpuTableExecutionPlanner::InitializeExecutionPlan()
         static_cast<uint32_t *>(d_tver_write_ops_before), d_output_txn_array, output_txn_array_baseTxn_size,
         curr_num_ops);
     gpu_err_check(cudaGetLastError());
+
+    if (pver_type == PVerType::SINGLE_VER_COPY)
+    {
+        using ShouldCopySingleVerIter = cub::TransformInputIterator<bool, ShouldCopySingleVer, OperationT *>;
+        ShouldCopySingleVerIter should_copy_single_val(static_cast<OperationT *>(d_rw_ops_type), ShouldCopySingleVer());
+        gpu_err_check(cub::DeviceSelect::Flagged(d_scratch_array, scratch_array_bytes,
+            static_cast<op_t *>(d_sorted_ops), should_copy_single_val, static_cast<op_t *>(d_permenant_version_rids),
+            d_num_copy_pver, curr_num_ops, std::any_cast<cudaStream_t>(cuda_stream)));
+        gpu_err_check(cudaMemcpyAsync(&h_num_copy_pver, d_num_copy_pver, sizeof(uint32_t), cudaMemcpyDeviceToHost,
+            std::any_cast<cudaStream_t>(cuda_stream)));
+    }
+
+    if (pver_type == PVerType::SINGLE_VER_SYNC)
+    {
+        using RowIdIter = cub::TransformInputIterator<uint32_t, RowIdExtractor, op_t *>;
+        RowIdIter row_id_val(static_cast<op_t *>(d_sorted_ops), RowIdExtractor());
+        using IsRecordAReadIter = cub::TransformInputIterator<uint32_t, IsRecordARead, OperationT *>;
+        IsRecordAReadIter is_record_a_read_val(static_cast<OperationT *>(d_rw_ops_type), IsRecordARead());
+        thrust::plus<uint32_t> plus_op;
+        gpu_err_check(cub::DeviceReduce::ReduceByKey(d_scratch_array, scratch_array_bytes, row_id_val, d_sync_row_ids,
+            is_record_a_read_val, d_sync_expected_temp, d_num_sync_expected, plus_op, curr_num_ops,
+            std::any_cast<cudaStream_t>(cuda_stream)));
+        gpu_err_check(cudaMemsetAsync(reinterpret_cast<void *>(d_pver_sync_counter), 0,
+            max_num_records * sizeof(uint32_t), std::any_cast<cudaStream_t>(cuda_stream)));
+        gpu_err_check(cudaMemsetAsync(reinterpret_cast<void *>(d_pver_sync_expect), 0,
+            max_num_records * sizeof(uint32_t), std::any_cast<cudaStream_t>(cuda_stream)));
+        const uint32_t block_size = 512;
+        const uint32_t grid_size = (max_num_ops + block_size - 1) / block_size;
+        scatterPverSyncExpected<<<grid_size, block_size, 0, std::any_cast<cudaStream_t>(cuda_stream)>>>(
+            d_sync_row_ids, d_sync_expected_temp, d_num_sync_expected, d_pver_sync_expect);
+    }
 }
 
 void GpuTableExecutionPlanner::FinishInitialization()
@@ -327,6 +417,65 @@ void GpuTableExecutionPlanner::FinishInitialization()
         }
     }
 #endif
+
+    if (pver_type == PVerType::SINGLE_VER_COPY)
+    {
+#if 0 // DEBUG
+        {
+            uint32_t debug_num_copy_pver = std::min(h_num_copy_pver, 100u);
+            op_t ops_to_copy[debug_num_copy_pver];
+            gpu_err_check(cudaMemcpy(ops_to_copy, d_permenant_version_rids, sizeof(op_t) * debug_num_copy_pver,
+                cudaMemcpyDeviceToHost));
+            for (int i = 0; i < debug_num_copy_pver; i++)
+            {
+                logger.Info("table[{}] op{}: record[{}] txn[{}] rw[{}] offset[{}]",
+                    name, i, GET_RECORD_ID(ops_to_copy[i]), GET_TXN_ID(ops_to_copy[i]), GET_R_W(ops_to_copy[i]),
+                    GET_OFFSET(ops_to_copy[i]));
+            }
+        }
+#endif
+        logger.Info("table[{}] num copy pver {}", name, h_num_copy_pver);
+    }
+
+    if (pver_type == PVerType::SINGLE_VER_SYNC)
+    {
+#if 0 // DEBUG
+        uint32_t debug_num_pver_sync = 100u;
+        uint32_t sync_expected[debug_num_pver_sync];
+        gpu_err_check(cudaMemcpy(
+            sync_expected, d_pver_sync_expect, sizeof(uint32_t) * debug_num_pver_sync, cudaMemcpyDeviceToHost));
+        for (uint32_t i = 0; i < debug_num_pver_sync; i++)
+        {
+            logger.Info("table[{}] sync expected for record[{}] is {}", name, i, sync_expected[i]);
+        }
+#endif
+
+#if 1 // SYNC_STAT
+        {
+            OperationT *h_rw_ops_type = new OperationT[curr_num_ops];
+            gpu_err_check(
+                cudaMemcpy(h_rw_ops_type, d_rw_ops_type, sizeof(OperationT) * curr_num_ops, cudaMemcpyDeviceToHost));
+
+            uint32_t num_record_b_writes = 0;
+            uint32_t num_record_a_reads = 0;
+
+            for (uint32_t i = 0; i < curr_num_ops; i++)
+            {
+                if (h_rw_ops_type[i] == OperationT::RECORD_B_WRITE)
+                {
+                    num_record_b_writes++;
+                }
+                if (h_rw_ops_type[i] == OperationT::RECORD_A_READ)
+                {
+                    num_record_a_reads++;
+                }
+            }
+
+            logger.Info("table[{}] num recordB writes {} num recordA reads {}", name, num_record_b_writes, num_record_a_reads);
+            delete[] h_rw_ops_type;
+        }
+#endif
+    }
 }
 
 void GpuTableExecutionPlanner::ScatterOpLocations() {}

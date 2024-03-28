@@ -22,6 +22,7 @@
 #include <benchmarks/tpcc_txn_gen.h>
 #include <benchmarks/tpcc_gpu_index.h>
 #include <benchmarks/tpcc_cpu_executor.h>
+#include <benchmarks/tpcc_pver_copyer.h>
 
 namespace epic::tpcc {
 TpccTxnMix::TpccTxnMix(
@@ -210,8 +211,9 @@ TpccDb::TpccDb(TpccConfig config)
         allocator.PrintMemoryInfo();
 
         /* TODO: execution input need to be transferred too, currently using placeholders */
-//        executor =
-//            std::make_shared<GpuExecutor>(records, versions, initialization_input, initialization_output, config);
+        //        executor =
+        //            std::make_shared<GpuExecutor>(records, versions, initialization_input, initialization_output,
+        //            config);
         executor =
             std::make_shared<GpuExecutor>(records, versions, execution_param_input, execution_plan_input, config);
     }
@@ -224,7 +226,7 @@ TpccDb::TpccDb(TpccConfig config)
         size_t warehouse_rec_size = sizeof(Record<WarehouseValue>) * config.warehouseTableSize();
         size_t warehouse_ver_size = sizeof(Version<WarehouseValue>) * config.num_txns;
         logger.Info("Warehouse record: {}, version: {}", formatSizeBytes(warehouse_rec_size),
-                    formatSizeBytes(warehouse_ver_size));
+            formatSizeBytes(warehouse_ver_size));
         records.warehouse_record = static_cast<Record<WarehouseValue> *>(Malloc(warehouse_rec_size));
         versions.warehouse_version = static_cast<Version<WarehouseValue> *>(Malloc(warehouse_ver_size));
 
@@ -253,7 +255,7 @@ TpccDb::TpccDb(TpccConfig config)
         size_t new_order_rec_size = sizeof(Record<NewOrderValue>) * config.newOrderTableSize();
         size_t new_order_ver_size = sizeof(Version<NewOrderValue>) * config.num_txns; /* TODO: not needed */
         logger.Info("NewOrder record: {}, version: {}", formatSizeBytes(new_order_rec_size),
-                    formatSizeBytes(new_order_ver_size));
+            formatSizeBytes(new_order_ver_size));
         records.new_order_record = static_cast<Record<NewOrderValue> *>(Malloc(new_order_rec_size));
         versions.new_order_version = static_cast<Version<NewOrderValue> *>(Malloc(new_order_ver_size));
 
@@ -266,7 +268,7 @@ TpccDb::TpccDb(TpccConfig config)
         size_t order_line_rec_size = sizeof(Record<OrderLineValue>) * config.orderLineTableSize();
         size_t order_line_ver_size = sizeof(Version<OrderLineValue>) * config.num_txns * 15; /* TODO: not needed */
         logger.Info("OrderLine record: {}, version: {}", formatSizeBytes(order_line_rec_size),
-                    formatSizeBytes(order_line_ver_size));
+            formatSizeBytes(order_line_ver_size));
         records.order_line_record = static_cast<Record<OrderLineValue> *>(Malloc(order_line_rec_size));
         versions.order_line_version = static_cast<Version<OrderLineValue> *>(Malloc(order_line_ver_size));
 
@@ -558,6 +560,25 @@ void TpccDb::runBenchmark()
             end_time = std::chrono::high_resolution_clock::now();
             logger.Info("Epoch {} execution time: {} us", epoch_id,
                 std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count());
+        }
+
+        /* pver copy */
+        {
+            if (config.use_copy_single_version)
+            {
+                start_time = std::chrono::high_resolution_clock::now();
+                copyTpccPver(records, versions, static_cast<op_t *>(warehouse_planner->d_permenant_version_rids),
+                    nullptr, warehouse_planner->h_num_copy_pver,
+                    static_cast<op_t *>(district_planner->d_permenant_version_rids), nullptr,
+                    district_planner->h_num_copy_pver, static_cast<op_t *>(customer_planner->d_permenant_version_rids),
+                    nullptr, customer_planner->h_num_copy_pver,
+                    static_cast<op_t *>(stock_planner->d_permenant_version_rids), nullptr,
+                    stock_planner->h_num_copy_pver);
+
+                end_time = std::chrono::high_resolution_clock::now();
+                logger.Info("Epoch {} copy pver time: {} us", epoch_id,
+                    std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count());
+            }
         }
     }
 }

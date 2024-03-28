@@ -436,6 +436,26 @@ __forceinline__ __device__ void gpuWriteToTableThread(Record<ValueType> *record,
     atomicExch(version_to_update, epoch);
 }
 
+__device__ __forceinline__ void gpuSyncRecordARead(
+    uint32_t record_id, uint32_t read_loc, uint32_t *pver_sync_counter, uint32_t lane_id)
+{
+    if (read_loc == loc_record_a && lane_id == 0)
+    {
+        atomicAdd(&pver_sync_counter[record_id], 1);
+    }
+    __syncwarp();
+}
+
+__device__ __forceinline__ void gpuSyncRecordBRW(
+    uint32_t record_id, uint32_t rw_loc, uint32_t *pver_sync_expected, uint32_t *pver_sync_counter, uint32_t lane_id)
+{
+    if (rw_loc == loc_record_b && lane_id == 0)
+    {
+        while (atomicAdd(&pver_sync_counter[record_id], 0) != pver_sync_expected[record_id]) {}
+    }
+    __syncwarp();
+}
+
 } // namespace epic
 
 #endif // EPIC_CUDA_AVAILABLE

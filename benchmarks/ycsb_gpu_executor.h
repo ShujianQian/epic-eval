@@ -17,7 +17,8 @@ public:
         : Executor(records, versions, txn, plan, config){};
     ~GpuExecutor() override = default;
 
-    void execute(uint32_t epoch) override;
+    void execute(uint32_t epoch, uint32_t *pver_sync_expected = nullptr, uint32_t *pver_sync_counter = nullptr) override;
+    void printStat() const override;
 };
 
 }

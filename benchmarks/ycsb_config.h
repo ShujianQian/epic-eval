@@ -45,6 +45,8 @@ struct YcsbConfig
     bool split_field = true;
     bool full_record_read = true;
     uint32_t cpu_exec_num_threads = 1;
+    bool use_copy_single_version = false;
+    bool use_sync_single_version = true;
 };
 
 } // namespace epic::ycsb

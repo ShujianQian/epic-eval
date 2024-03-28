@@ -42,6 +42,10 @@ public:
 
     void *d_output_txn_array;
     size_t output_txn_array_baseTxn_size;
+    uint32_t *d_num_copy_pver = nullptr;
+    uint32_t *d_num_sync_expected = nullptr;
+    uint32_t *d_sync_row_ids = nullptr;
+    uint32_t *d_sync_expected_temp = nullptr;
 
     std::any cuda_stream;
     //    void *d_scratch_array = nullptr; /* for cub sort and scan */

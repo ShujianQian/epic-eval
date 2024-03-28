@@ -29,9 +29,13 @@ public:
         , config(config)
     {}
     virtual ~Executor() = default;
-    virtual void execute(uint32_t epoch)
+    virtual void execute(uint32_t epoch, uint32_t *pver_sync_expected = nullptr, uint32_t *pver_sync_counter = nullptr)
     {
         throw std::runtime_error("epic::ycsb::Executor::execute() is not implemented.");
+    };
+    virtual void printStat() const
+    {
+        throw std::runtime_error("epic::ycsb::Executor::printStat() is not implemented.");
     };
 };
 

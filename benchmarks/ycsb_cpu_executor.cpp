@@ -6,7 +6,7 @@
 
 namespace epic::ycsb {
 
-void CpuExecutor::execute(uint32_t epoch)
+void CpuExecutor::execute(uint32_t epoch, uint32_t *pver_sync_expected, uint32_t *pver_sync_counter)
 {
     uint32_t num_threads = config.cpu_exec_num_threads;
     std::vector<std::thread> threads;

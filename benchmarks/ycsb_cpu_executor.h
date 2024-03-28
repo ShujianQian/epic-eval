@@ -17,7 +17,7 @@ public:
         : Executor(records, versions, txn, plan, config){};
     ~CpuExecutor() override = default;
 
-    void execute(uint32_t epoch) override;
+    void execute(uint32_t epoch, uint32_t * pver_sync_expected = nullptr, uint32_t *pver_sync_counter = nullptr) override;
 private:
     void executionWorker(uint32_t epoch, uint32_t thread_id);
 };

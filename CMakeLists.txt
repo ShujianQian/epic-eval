@@ -51,7 +51,10 @@ set(EPIC_GPU_SOURCE
         benchmarks/tpcc_gpu_index.cu
         benchmarks/ycsb_gpu_index.cu
         benchmarks/ycsb_gpu_submitter.cu
-        benchmarks/ycsb_gpu_executor.cu)
+        benchmarks/ycsb_gpu_executor.cu
+        pver_copyer.cu
+        benchmarks/ycsb_pver_copyer.cu
+        benchmarks/tpcc_pver_copyer.cu)
 
 set(GACCO_GPU_SOURCE
     gacco/gpu_execution_planner.cu
