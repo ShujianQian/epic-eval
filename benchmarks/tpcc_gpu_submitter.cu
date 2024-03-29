@@ -81,7 +81,7 @@ static __device__ __forceinline__ void prepareSubmitTpccTxn(
     int txn_id, NewOrderTxnParams<FixedSizeTxn> *txn, TpccNumOps num_ops)
 {
     num_ops.warehouse_num_ops[txn_id] = 1;
-    num_ops.district_num_ops[txn_id] = 1;
+    num_ops.district_num_ops[txn_id] = 2;
     num_ops.customer_num_ops[txn_id] = 1;
     num_ops.history_num_ops[txn_id] = 0;
     num_ops.order_num_ops[txn_id] = 1;
@@ -142,6 +142,8 @@ static __device__ __forceinline__ void submitTpccTxn(
         txn->warehouse_id, txn_id, read_op, offsetof(NewOrderExecPlan<FixedSizeTxn>, warehouse_loc) / sizeof(uint32_t));
     static_cast<uint64_t *>(submit_loc.district_dest)[submit_loc.district_offset[txn_id]] = CREATE_OP(
         txn->district_id, txn_id, read_op, offsetof(NewOrderExecPlan<FixedSizeTxn>, district_loc) / sizeof(uint32_t));
+    static_cast<uint64_t *>(submit_loc.district_dest)[submit_loc.district_offset[txn_id] + 1] = CREATE_OP(
+        txn->district_id, txn_id, write_op, offsetof(NewOrderExecPlan<FixedSizeTxn>, district_write_loc) / sizeof(uint32_t));
     static_cast<uint64_t *>(submit_loc.customer_dest)[submit_loc.customer_offset[txn_id]] = CREATE_OP(
         txn->customer_id, txn_id, read_op, offsetof(NewOrderExecPlan<FixedSizeTxn>, customer_loc) / sizeof(uint32_t));
     static_cast<uint64_t *>(submit_loc.order_dest)[submit_loc.order_offset[txn_id]] = CREATE_OP(

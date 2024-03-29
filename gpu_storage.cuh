@@ -111,6 +111,7 @@ __forceinline__ __device__ void gpuReadFromTableCoop(Record<ValueType> *record, 
         __shfl_sync(all_lanes_mask, reinterpret_cast<uintptr_t>(value_to_read), leader_lane_id));
 
     /* read into result */
+    result = 0;
     for (int base = 0; base < length; base += 32)
     {
         if (lane_id + base < length)

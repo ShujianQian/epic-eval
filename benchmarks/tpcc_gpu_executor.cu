@@ -32,6 +32,7 @@ __device__ __forceinline__ void gpuExecTpccTxn(TpccRecords records, TpccVersions
     constexpr uint32_t leader_lane = 0;
     constexpr uint32_t all_lanes_mask = 0xffffffffu;
     constexpr uint32_t s_quantity_offset = offsetof(StockValue, s_quantity) / sizeof(uint32_t);
+    constexpr uint32_t d_next_o_id_offset = offsetof(DistrictValue, d_next_o_id) / sizeof(uint32_t);
 
 #if 0 // DEBUG
     if (lane_id == leader_lane)
@@ -47,21 +48,20 @@ __device__ __forceinline__ void gpuExecTpccTxn(TpccRecords records, TpccVersions
     }
 #endif
 
-    uint32_t result;
-    //    gpuReadFromTableCoop(records.warehouse_record, versions.warehouse_version, params->warehouse_id, loc_record_a,
-    //        epoch, result, lane_id);
+    uint32_t result = 0;
     gpuReadFromTableCoop(records.warehouse_record, versions.warehouse_version, params->warehouse_id,
         plan->warehouse_loc, epoch, result, lane_id);
 
-    //    gpuReadFromTableCoop(
-    //        records.district_record, versions.district_version, params->district_id, loc_record_a, epoch, result,
-    //        lane_id);
     gpuReadFromTableCoop(records.district_record, versions.district_version, params->district_id, plan->district_loc,
         epoch, result, lane_id);
+    if (lane_id == d_next_o_id_offset)
+    {
+        // printf("RESULT[%u] tid[%u] district[%u] next_o_id[%u]\n", result, txn_id, params->district_id, params->next_order_id);
+        result = params->next_order_id;
+    }
+    gpuWriteToTableCoop(records.district_record, versions.district_version, params->district_id,
+        plan->district_write_loc, epoch, result, lane_id);
 
-    //    gpuReadFromTableCoop(
-    //        records.customer_record, versions.customer_version, params->customer_id, loc_record_a, epoch, result,
-    //        lane_id);
     gpuReadFromTableCoop(records.customer_record, versions.customer_version, params->customer_id, plan->customer_loc,
         epoch, result, lane_id);
 

@@ -35,6 +35,8 @@ inline void CpuExecutor::executeTxn(
     mult += w.w_tax / 100.0;
     DistrictValue d;
     readFromTable(records.district_record, versions.district_version, txn->district_id, plan->district_loc, epoch, &d);
+    d.d_next_o_id = txn->next_order_id;
+    writeToTable(records.district_record, versions.district_version, txn->district_id, plan->district_write_loc, epoch, &d);
     mult += d.d_tax / 100.0;
     CustomerValue c;
     readFromTable(records.customer_record, versions.customer_version, txn->customer_id, plan->customer_loc, epoch, &c);

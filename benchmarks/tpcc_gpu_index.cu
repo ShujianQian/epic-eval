@@ -162,6 +162,7 @@ void __device__ __forceinline__ indexTpccTxn(NewOrderTxnInput<FixedSizeTxn> *txn
         {
             assert(false);
         }
+        index->next_order_id = txn->o_id;
     }
 
     {

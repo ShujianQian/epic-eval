@@ -74,6 +74,7 @@ struct NewOrderTxnParams
     uint32_t new_order_id; /* w_id, d_id, o_id */
     uint32_t order_id;     /* w_id, d_id, o_id */
     uint32_t num_items;
+    uint32_t next_order_id;
     bool all_local;
     ItemParams items[TxnType::kMaxItems];
 };
@@ -95,6 +96,7 @@ struct NewOrderExecPlan
     };
     uint32_t warehouse_loc;
     uint32_t district_loc;
+    uint32_t district_write_loc;
     uint32_t customer_loc;
     uint32_t new_order_loc;
     uint32_t order_loc;

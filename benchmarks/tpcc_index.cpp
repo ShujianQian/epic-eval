@@ -77,6 +77,7 @@ void TpccCpuIndex::indexTxnWrites(NewOrderTxnInput<FixedSizeTxn> *txn, void *ind
     NewOrderKey new_order_key = {txn->o_id, txn->d_id, txn->origin_w_id};
     index->new_order_id = g_new_order_index->searchOrInsert(new_order_key.base_key);
     index->num_items = txn->num_items;
+    index->next_order_id = txn->o_id;
     index->all_local = true;
     for (uint32_t i = 0; i < txn->num_items; ++i)
     {

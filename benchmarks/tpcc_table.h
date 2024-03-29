@@ -75,7 +75,7 @@ struct DistrictValue
 {
     uint32_t d_ytd;
     uint32_t d_tax;
-    // uint32_t d_next_o_id; /* not used */
+    uint32_t d_next_o_id;
     uint8_t d_name[12];
     uint8_t d_street_1[20];
     uint8_t d_street_2[20];
