@@ -5,6 +5,14 @@ project(epic CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+find_package(PkgConfig REQUIRED)
+pkg_check_modules (JEMALLOC jemalloc)
+
+pkg_search_module(JEMALLOC REQUIRED jemalloc)
+include_directories(${JEMALLOC_INCLUDE_DIRS})
+
+add_definitions(-DCACHE_LINE_SIZE=64)
+
 find_package(CUDA QUIET)
 
 if (CUDA_FOUND)
@@ -22,6 +30,10 @@ endif ()
 set(EPIC_CPU_SOURCE
         util_log.cpp
         util_math.cpp
+        cpu_auxiliary_range_index.cpp
+        third_party/masstree/kvthread.cc
+        third_party/masstree/string.cc
+        third_party/masstree/straccum.cc
         benchmarks/ycsb.cpp
         benchmarks/tpcc_txn.cpp
         benchmarks/tpcc.cpp
@@ -66,7 +78,7 @@ else ()
     set(EPIC_SOURCE ${EPIC_CPU_SOURCE} ${GACCO_CPU_SOURCE})
 endif ()
 
-include_directories(${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/gpu_src ${CMAKE_SOURCE_DIR}/third_party/spdlog/include)
+include_directories(${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/gpu_src ${CMAKE_SOURCE_DIR}/third_party/spdlog/include ${CMAKE_SOURCE_DIR}/third_party/masstree)
 if (CUDA_FOUND)
     include_directories(${CMAKE_SOURCE_DIR}/third_party/cuco/include)
 endif()
@@ -74,9 +86,11 @@ add_library(epic STATIC ${EPIC_SOURCE})
 if (CUDA_FOUND)
     set_property(TARGET epic PROPERTY CUDA_ARCHITECTURES 86)
 endif ()
+target_link_libraries(epic ${JEMALLOC_LIBRARIES})
 
 add_executable(epic_driver main.cpp)
 target_link_libraries(epic_driver epic)
+target_link_libraries(epic_driver ${JEMALLOC_LIBRARIES})
 
 if (CUDA_FOUND)
     add_executable(test_epic ${CMAKE_SOURCE_DIR}/tests/unit_tests/test_gpu_table.cu)
@@ -110,4 +124,4 @@ endif ()
 #
 #target_link_libraries(epic PRIVATE ${EPIC_LINK_LIB})
 #
-#add_subdirectory(tests)
+add_subdirectory(tests)

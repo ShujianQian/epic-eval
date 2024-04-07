@@ -7,3 +7,6 @@
 [submodule "third_party/cuco"]
 	path = third_party/cuco
 	url = git@github.com:NVIDIA/cuCollections.git
+[submodule "third_party/masstree"]
+	path = third_party/masstree
+	url = git@github.com:uoft-felis/masstree.git

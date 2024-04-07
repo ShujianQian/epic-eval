@@ -15,7 +15,7 @@ using epic::tpcc::FixedSizeTxn;
 
 using epic::tpcc::NewOrderTxnInput;
 using epic::tpcc::PaymentTxnInput;
-using epic::tpcc::OrderStatusTxn;
+using epic::tpcc::OrderStatusTxnInput;
 using epic::tpcc::DeliveryTxn;
 using epic::tpcc::StockLevelTxn;
 

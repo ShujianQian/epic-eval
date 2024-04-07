@@ -22,6 +22,7 @@
 #include <benchmarks/tpcc_executor.h>
 #include <benchmarks/tpcc_gpu_executor.h>
 #include <benchmarks/tpcc_index.h>
+#include <benchmarks/tpcc_cpu_aux_index.h>
 
 namespace epic::tpcc {
 
@@ -63,6 +64,8 @@ private:
     TpccVersions versions;
 
     std::shared_ptr<Executor> executor;
+
+    TpccCpuAuxIndex cpu_aux_index;
 
 public:
     explicit TpccDb(TpccConfig config);

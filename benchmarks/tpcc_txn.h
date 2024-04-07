@@ -131,9 +131,29 @@ struct PaymentTxnExecPlan
     uint32_t customer_write_loc;
 };
 
-class OrderStatusTxn
+struct OrderStatusTxnInput
 {
     /* TODO: implement order-status txn */
+    uint32_t w_id;
+    uint32_t d_id;
+    uint32_t c_id;
+    uint32_t o_id;
+    uint32_t num_items;
+};
+
+struct OrderStatusTxnParams
+{
+    uint32_t customer_id;
+    uint32_t order_id;
+    uint32_t num_items;
+    uint32_t orderline_ids[15];
+};
+
+struct OrderStatusTxnExecPlan
+{
+    uint32_t customer_loc;
+    uint32_t order_loc;
+    uint32_t orderline_locs[15];
 };
 
 class DeliveryTxn
@@ -153,7 +173,7 @@ union TpccTxn
 {
     NewOrderTxnInput<FixedSizeTxn> new_order_txn;
     PaymentTxnInput payment_txn;
-    OrderStatusTxn order_status_txn;
+    OrderStatusTxnInput order_status_txn;
     DeliveryTxn delivery_txn;
     StockLevelTxn stock_level_txn;
 };
@@ -162,19 +182,21 @@ union TpccTxnParam
 {
     NewOrderTxnParams<FixedSizeTxn> new_order_txn;
     PaymentTxnParams payment_txn;
+    OrderStatusTxnParams order_status_txn;
 } __attribute__((aligned(4)));
 
 union TpccExecPlan
 {
     NewOrderExecPlan<FixedSizeTxn> new_order_txn;
     PaymentTxnExecPlan payment_txn;
+    OrderStatusTxnExecPlan order_status_txn;
 } __attribute__((aligned(4)));
 
 /* TODO: how to implement piece exection on GPU? */
 void runTransaction(BaseTxn *txn);
 void runTransaction(NewOrderTxnInput<FixedSizeTxn> *txn);
 void runTransaction(PaymentTxnInput *txn);
-void runTransaction(OrderStatusTxn *txn);
+void runTransaction(OrderStatusTxnInput *txn);
 void runTransaction(DeliveryTxn *txn);
 } // namespace epic::tpcc
 

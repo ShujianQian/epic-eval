@@ -36,8 +36,8 @@ void TpccTxnGenerator::generateTxn(NewOrderTxnInput<FixedSizeTxn> *txn, uint32_t
 {
     /* TODO: generate rollbacks? */
     txn->origin_w_id = w_id_dist(gen);
-    txn->o_id = o_id_gen.getOId(timestamp);
     txn->d_id = d_id_dist(gen);
+    txn->o_id = o_id_gen.nextOId(txn->origin_w_id, txn->d_id);
     txn->c_id = c_id_dist(gen);
     txn->num_items = num_item_dist(gen);
     for (size_t i = 0; i < txn->num_items; ++i)
@@ -101,9 +101,13 @@ void TpccTxnGenerator::generateTxn(PaymentTxnInput *txn, uint32_t timestamp)
     txn->payment_amount = payment_amount_dist(gen);
 }
 
-void TpccTxnGenerator::generateTxn(OrderStatusTxn *txn, uint32_t timestamp)
+void TpccTxnGenerator::generateTxn(OrderStatusTxnInput *txn, uint32_t timestamp)
 {
     /* TODO: generate order-status txn */
+    txn->w_id = w_id_dist(gen);
+    txn->d_id = d_id_dist(gen);
+    txn->c_id = c_id_dist(gen);
+    txn->o_id = o_id_gen.currOId(txn->w_id, txn->d_id);
 }
 
 void TpccTxnGenerator::generateTxn(DeliveryTxn *txn, uint32_t timestamp)
@@ -129,7 +133,7 @@ void TpccTxnGenerator::generateTxn(BaseTxn *txn, uint32_t timestamp)
         generateTxn(reinterpret_cast<PaymentTxnInput *>(txn->data), timestamp);
         break;
     case TpccTxnType::ORDER_STATUS:
-        generateTxn(reinterpret_cast<OrderStatusTxn *>(txn->data), timestamp);
+        generateTxn(reinterpret_cast<OrderStatusTxnInput *>(txn->data), timestamp);
         break;
     case TpccTxnType::DELIVERY:
         generateTxn(reinterpret_cast<DeliveryTxn *>(txn->data), timestamp);

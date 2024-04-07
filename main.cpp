@@ -78,6 +78,7 @@ int main(int argc, char **argv)
             else if (bench == "tpcc")
             {
                 tpcc_config.txn_mix = {50, 50, 0, 0, 0};
+                tpcc_config.txn_mix = {45, 43, 12, 0, 0};
             }
             else
             {

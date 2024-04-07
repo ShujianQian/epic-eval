@@ -40,11 +40,30 @@ public:
 
 class TpccOIdGenerator
 {
+    uint32_t next_oid_counter[256][20]{};
 public:
+    explicit TpccOIdGenerator(uint32_t initial_orders_per_district = 3000)
+    {
+        for (size_t i = 0; i < 256; ++i)
+        {
+            for (size_t j = 0; j < 20; ++j)
+            {
+                next_oid_counter[i][j] = initial_orders_per_district;
+            }
+        }
+    }
     inline uint32_t getOId(uint32_t timestamp)
     {
         constexpr uint32_t loader_max_order_id = 1'000'000; /* max number of orders used by loader */
         return timestamp + loader_max_order_id;
+    }
+
+    inline uint32_t nextOId(uint32_t w_id, uint32_t d_id) {
+        return ++next_oid_counter[w_id][d_id];
+    }
+
+    inline uint32_t currOId(uint32_t w_id, uint32_t d_id) {
+        return next_oid_counter[w_id][d_id];
     }
 };
 
@@ -75,7 +94,7 @@ struct TpccTxnGenerator
     TpccTxnType getTxnType();
     void generateTxn(NewOrderTxnInput<FixedSizeTxn> *txn, uint32_t timestamp);
     void generateTxn(PaymentTxnInput *txn, uint32_t timestamp);
-    void generateTxn(OrderStatusTxn *txn, uint32_t timestamp);
+    void generateTxn(OrderStatusTxnInput *txn, uint32_t timestamp);
     void generateTxn(DeliveryTxn *txn, uint32_t timestamp);
     void generateTxn(StockLevelTxn *txn, uint32_t timestamp);
     void generateTxn(BaseTxn *txn, uint32_t timestamp);

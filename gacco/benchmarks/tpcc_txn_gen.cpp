@@ -22,7 +22,7 @@ void TpccTxnGenerator::generateTxn(epic::BaseTxn *txn, uint32_t txn_id, uint32_t
         epic::tpcc::TpccTxnGenerator::generateTxn(reinterpret_cast<PaymentTxnInput *>(txn->data), timestamp);
         break;
     case TpccTxnType::ORDER_STATUS:
-        epic::tpcc::TpccTxnGenerator::generateTxn(reinterpret_cast<OrderStatusTxn *>(txn->data), timestamp);
+        epic::tpcc::TpccTxnGenerator::generateTxn(reinterpret_cast<OrderStatusTxnInput *>(txn->data), timestamp);
         break;
     case TpccTxnType::DELIVERY:
         epic::tpcc::TpccTxnGenerator::generateTxn(reinterpret_cast<DeliveryTxn *>(txn->data), timestamp);

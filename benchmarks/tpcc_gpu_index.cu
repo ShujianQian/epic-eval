@@ -55,7 +55,7 @@ __device__ __forceinline__ void tpccPrepareInsertIndex(NewOrderTxnInput<FixedSiz
             orderline_insert[base + i] = static_cast<OrderLineKey::baseType>(-1);
             continue;
         }
-        order_line_key.ol_w_id = txn->items[i].w_id;
+        order_line_key.ol_w_id = txn->origin_w_id;
         order_line_key.ol_number = i + 1;
         orderline_insert[base + i] = order_line_key.base_key;
     }
@@ -94,7 +94,7 @@ __global__ void prepareTpccIndexKernel(GpuTxnArray txn, OrderKey::baseType *orde
             reinterpret_cast<PaymentTxnInput *>(txn_ptr->data), order_insert, new_order_insert, orderline_insert, tid);
         break;
     default:
-        /* TODO: implement prepare insert for the rest of txn types */
+        /* No insert needed for the other three transactions */
         break;
     }
 }
@@ -238,7 +238,7 @@ void __device__ __forceinline__ indexTpccTxn(NewOrderTxnInput<FixedSizeTxn> *txn
                 OrderLineKey order_line_key;
                 order_line_key.ol_o_id = txn->o_id;
                 order_line_key.ol_d_id = txn->d_id;
-                order_line_key.ol_w_id = txn->items[i].w_id;
+                order_line_key.ol_w_id = txn->origin_w_id;
                 order_line_key.ol_number = i + 1;
                 auto order_line_found = index_view.order_line_view.find(order_line_key.base_key);
                 if (order_line_found != index_view.order_line_view.end())
@@ -316,6 +316,64 @@ void __device__ __forceinline__ indexTpccTxn(
     }
 }
 
+void __device__ __forceinline__ indexTpccTxn(
+    OrderStatusTxnInput *txn, OrderStatusTxnParams *index, tpccGpuIndexFindView index_view, uint32_t tid)
+{
+    {
+        CustomerKey customer_key;
+        customer_key.key.c_id = txn->c_id;
+        customer_key.key.c_d_id = txn->d_id;
+        customer_key.key.c_w_id = txn->w_id;
+        auto customer_found = index_view.customer_view.find(customer_key.base_key);
+        if (customer_found != index_view.customer_view.end())
+        {
+            index->customer_id = customer_found->second.load(cuda::std::memory_order_relaxed);
+        }
+        else
+        {
+            assert(false);
+        }
+    }
+
+    {
+        OrderKey order_key;
+        order_key.o_id = txn->o_id;
+        order_key.o_d_id = txn->d_id;
+        order_key.o_w_id = txn->w_id;
+
+        auto order_found = index_view.order_view.find(order_key.base_key);
+        if (order_found != index_view.order_view.end())
+        {
+            index->order_id = order_found->second.load(cuda::std::memory_order_relaxed);
+        }
+        else
+        {
+            assert(false);
+        }
+    }
+
+    uint32_t num_items = txn->num_items;
+    index->num_items = num_items;
+    for (int i = 0; i < num_items; ++i)
+    {
+        OrderLineKey order_line_key;
+        order_line_key.ol_o_id = txn->o_id;
+        order_line_key.ol_d_id = txn->d_id;
+        order_line_key.ol_w_id = txn->w_id;
+        order_line_key.ol_number = i + 1;
+        auto order_line_found = index_view.order_line_view.find(order_line_key.base_key);
+        if (order_line_found != index_view.order_line_view.end())
+        {
+            index->orderline_ids[i] = order_line_found->second.load(cuda::std::memory_order_relaxed);
+        }
+        else
+        {
+            assert(false);
+        }
+    }
+
+}
+
 __global__ void indexTpccTxnKernel(
     GpuTxnArray txn, GpuTxnArray index, tpccGpuIndexFindView index_view, uint32_t num_txns)
 {
@@ -339,6 +397,9 @@ __global__ void indexTpccTxnKernel(
         indexTpccTxn(reinterpret_cast<PaymentTxnInput *>(txn_ptr->data),
             reinterpret_cast<PaymentTxnParams *>(index_ptr->data), index_view, tid);
         break;
+    case TpccTxnType::ORDER_STATUS:
+        indexTpccTxn(reinterpret_cast<OrderStatusTxnInput *>(txn_ptr->data),
+            reinterpret_cast<OrderStatusTxnParams *>(index_ptr->data), index_view, tid);
     default:
         /* TODO: implement prepare insert for the rest of txn types */
         break;

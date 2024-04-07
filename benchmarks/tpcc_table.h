@@ -310,6 +310,29 @@ struct StockDataValue
     uint8_t s_data[52];
     uint8_t s_dist[10][24];
 };
+
+union ClientOrderKey
+{
+    using baseType = typename ChooseBitfieldBaseType<10'000'000, 20, 2 * kMaxWarehouses, 96'000>::type;
+    struct
+    {
+        baseType oc_o_id : ceilLog2(10'000'000);
+        baseType oc_c_id : ceilLog2(96'000);
+        baseType oc_d_id : ceilLog2(20);
+        baseType oc_w_id : ceilLog2(2 * kMaxWarehouses);
+    };
+    baseType base_key = 0;
+    ClientOrderKey() = default;
+    constexpr ClientOrderKey(baseType oc_o_id, baseType oc_c_id, baseType oc_d_id, baseType oc_w_id)
+    {
+        base_key = 0;
+        this->oc_o_id = oc_o_id;
+        this->oc_c_id = oc_c_id;
+        this->oc_d_id = oc_d_id;
+        this->oc_w_id = oc_w_id;
+    }
+};
+
 } // namespace epic::tpcc
 
 #endif // TPCC_TABLE_H
