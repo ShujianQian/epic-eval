@@ -25,10 +25,10 @@ void TpccTxnGenerator::generateTxn(epic::BaseTxn *txn, uint32_t txn_id, uint32_t
         epic::tpcc::TpccTxnGenerator::generateTxn(reinterpret_cast<OrderStatusTxnInput *>(txn->data), timestamp);
         break;
     case TpccTxnType::DELIVERY:
-        epic::tpcc::TpccTxnGenerator::generateTxn(reinterpret_cast<DeliveryTxn *>(txn->data), timestamp);
+        epic::tpcc::TpccTxnGenerator::generateTxn(reinterpret_cast<DeliveryTxnInput *>(txn->data), timestamp);
         break;
     case TpccTxnType::STOCK_LEVEL:
-        epic::tpcc::TpccTxnGenerator::generateTxn(reinterpret_cast<StockLevelTxn *>(txn->data), timestamp);
+        epic::tpcc::TpccTxnGenerator::generateTxn(reinterpret_cast<StockLevelTxnInput *>(txn->data), timestamp);
         break;
     default:
         break;

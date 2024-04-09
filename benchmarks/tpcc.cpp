@@ -77,14 +77,14 @@ TpccDb::TpccDb(TpccConfig config)
         district_planner = std::make_unique<GpuTableExecutionPlanner>(
             "district", allocator, 0, 2, config.num_txns, config.num_warehouses * 10, initialization_output);
         customer_planner = std::make_unique<GpuTableExecutionPlanner>(
-            "customer", allocator, 0, 2, config.num_txns, config.num_warehouses * 10 * 3000, initialization_output);
+            "customer", allocator, 0, 20, config.num_txns, config.num_warehouses * 10 * 3000, initialization_output);
         history_planner = std::make_unique<GpuTableExecutionPlanner>(
             "history", allocator, 0, 1, config.num_txns, config.num_warehouses * 10 * 3000, initialization_output);
         new_order_planner = std::make_unique<GpuTableExecutionPlanner>(
-            "new_order", allocator, 0, 1, config.num_txns, config.num_warehouses * 10 * 900, initialization_output);
+            "new_order", allocator, 0, 10, config.num_txns, config.num_warehouses * 10 * 900, initialization_output);
         order_planner = std::make_unique<GpuTableExecutionPlanner>(
-            "order", allocator, 0, 1, config.num_txns, config.num_warehouses * 10 * 3000, initialization_output);
-        order_line_planner = std::make_unique<GpuTableExecutionPlanner>("order_line", allocator, 0, 15, config.num_txns,
+            "order", allocator, 0, 20, config.num_txns, config.num_warehouses * 10 * 3000, initialization_output);
+        order_line_planner = std::make_unique<GpuTableExecutionPlanner>("order_line", allocator, 0, 30, config.num_txns,
             config.num_warehouses * 10 * 3000 * 15, initialization_output);
         item_planner = std::make_unique<GpuTableExecutionPlanner>(
             "item", allocator, 0, 15, config.num_txns, 100'000, initialization_output);

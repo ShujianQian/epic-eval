@@ -4,6 +4,8 @@
 
 #include <benchmarks/tpcc_txn_gen.h>
 
+#include <ctime>
+
 namespace epic::tpcc {
 
 TpccTxnType TpccTxnGenerator::getTxnType()
@@ -37,7 +39,7 @@ void TpccTxnGenerator::generateTxn(NewOrderTxnInput<FixedSizeTxn> *txn, uint32_t
     /* TODO: generate rollbacks? */
     txn->origin_w_id = w_id_dist(gen);
     txn->d_id = d_id_dist(gen);
-    txn->o_id = o_id_gen.nextOId(txn->origin_w_id, txn->d_id);
+    txn->o_id = o_id_gen.nextOId(txn->origin_w_id - 1, txn->d_id - 1);
     txn->c_id = c_id_dist(gen);
     txn->num_items = num_item_dist(gen);
     for (size_t i = 0; i < txn->num_items; ++i)
@@ -103,19 +105,21 @@ void TpccTxnGenerator::generateTxn(PaymentTxnInput *txn, uint32_t timestamp)
 
 void TpccTxnGenerator::generateTxn(OrderStatusTxnInput *txn, uint32_t timestamp)
 {
-    /* TODO: generate order-status txn */
     txn->w_id = w_id_dist(gen);
     txn->d_id = d_id_dist(gen);
     txn->c_id = c_id_dist(gen);
-    txn->o_id = o_id_gen.currOId(txn->w_id, txn->d_id);
+    txn->o_id = o_id_gen.currOId(txn->w_id - 1, txn->d_id - 1);
 }
 
-void TpccTxnGenerator::generateTxn(DeliveryTxn *txn, uint32_t timestamp)
+void TpccTxnGenerator::generateTxn(DeliveryTxnInput *txn, uint32_t timestamp)
 {
-    /* TODO: generate delivery txn */
+    txn->w_id = w_id_dist(gen);
+    txn->carrier_id = carrier_id_dist(gen);
+    txn->delivery_d = time(nullptr);
+    txn->o_id = o_id_gen.nextDeliverOId(txn->w_id - 1);
 }
 
-void TpccTxnGenerator::generateTxn(StockLevelTxn *txn, uint32_t timestamp)
+void TpccTxnGenerator::generateTxn(StockLevelTxnInput *txn, uint32_t timestamp)
 {
     /* TODO: generate stock-level txn */
 }
@@ -136,10 +140,10 @@ void TpccTxnGenerator::generateTxn(BaseTxn *txn, uint32_t timestamp)
         generateTxn(reinterpret_cast<OrderStatusTxnInput *>(txn->data), timestamp);
         break;
     case TpccTxnType::DELIVERY:
-        generateTxn(reinterpret_cast<DeliveryTxn *>(txn->data), timestamp);
+        generateTxn(reinterpret_cast<DeliveryTxnInput *>(txn->data), timestamp);
         break;
     case TpccTxnType::STOCK_LEVEL:
-        generateTxn(reinterpret_cast<StockLevelTxn *>(txn->data), timestamp);
+        generateTxn(reinterpret_cast<StockLevelTxnInput *>(txn->data), timestamp);
         break;
     default:
         break;

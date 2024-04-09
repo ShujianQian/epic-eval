@@ -95,6 +95,9 @@ __global__ void prepareTpccIndexKernel(GpuTxnArray txn, OrderKey::baseType *orde
         break;
     default:
         /* No insert needed for the other three transactions */
+        /* TODO: write a common funciton for these transactions */
+        tpccPrepareInsertIndex(
+            reinterpret_cast<PaymentTxnInput *>(txn_ptr->data), order_insert, new_order_insert, orderline_insert, tid);
         break;
     }
 }
@@ -374,6 +377,135 @@ void __device__ __forceinline__ indexTpccTxn(
 
 }
 
+void __device__ __forceinline__ indexTpccTxn(DeliveryTxnInput *txn, DeliveryTxnParams *index, tpccGpuIndexFindView index_view, uint32_t tid)
+{
+    index->carrier_id = txn->carrier_id;
+    index->delivery_d = txn->delivery_d;
+    for (int i = 0; i < 10; ++i)
+        {
+            NewOrderKey new_order_key;
+            new_order_key.no_o_id = txn->o_id;
+            new_order_key.no_d_id = i + 1;
+            new_order_key.no_w_id = txn->w_id;
+            auto new_order_found = index_view.new_order_view.find(new_order_key.base_key);
+            if (new_order_found != index_view.new_order_view.end())
+            {
+                index->new_order_id[i] = new_order_found->second.load(cuda::std::memory_order_relaxed);
+            }
+            else
+            {
+                assert(false);
+            }
+        }
+
+    for (int i = 0; i < 10; ++i)
+        {
+            OrderKey order_key;
+            order_key.o_id = txn->o_id;
+            order_key.o_d_id = i + 1;
+            order_key.o_w_id = txn->w_id;
+            auto order_found = index_view.order_view.find(order_key.base_key);
+            if (order_found != index_view.order_view.end())
+            {
+                index->order_id[i] = order_found->second.load(cuda::std::memory_order_relaxed);
+            }
+            else
+            {
+                assert(false);
+            }
+        }
+
+    for (int i = 0; i < 10; ++i)
+        {
+            CustomerKey customer_key;
+            customer_key.key.c_id = txn->customers[i];
+            customer_key.key.c_d_id = i + 1;
+            customer_key.key.c_w_id = txn->w_id;
+            auto customer_found = index_view.customer_view.find(customer_key.base_key);
+            if (customer_found != index_view.customer_view.end())
+            {
+                index->customer_id[i] = customer_found->second.load(cuda::std::memory_order_relaxed);
+            }
+            else
+            {
+                assert(false);
+            }
+        }
+
+    for (int i = 0; i < 10; ++i)
+    {
+        for (int j = 0; j < txn->num_items[i]; ++j)
+        {
+            OrderLineKey order_line_key;
+            order_line_key.ol_o_id = txn->o_id;
+            order_line_key.ol_d_id = i + 1;
+            order_line_key.ol_w_id = txn->w_id;
+            order_line_key.ol_number = j + 1;
+            auto order_line_found = index_view.order_line_view.find(order_line_key.base_key);
+            if (order_line_found != index_view.order_line_view.end())
+            {
+                index->orderline_ids[i][j] = order_line_found->second.load(cuda::std::memory_order_relaxed);
+            }
+            else
+            {
+                printf("Order line not found wid[%d] did[%d] oid[%d] olid[%d]\n", txn->w_id, i+ 1, txn->o_id, j + 1);
+                assert(false);
+            }
+
+            // if (index->orderline_ids[i][j] > 500'000)
+            // {
+            //     printf("txn[%d] indexed orderline[%d] > 500'000 wid[%d] did[%d] oid[%d] olid[%d]\n", tid, index->orderline_ids[i][j],
+            //         txn->w_id, i + 1, txn->o_id, j + 1);
+            // }
+        }
+    }
+
+    index->carrier_id = txn->carrier_id;
+    index->delivery_d = txn->delivery_d;
+
+    int total_items = 0;
+    for (int i = 0; i < 10; ++i)
+    {
+        index->num_items[i] = txn->num_items[i];
+        // index->num_items[i] = 0;;
+        total_items += index->num_items[i];
+    }
+    // printf("txn[%d] total_items[%d] ptr[%p] "
+    //     "item0[%d] "
+    //     "item1[%d] "
+    //     "item2[%d] "
+    //     "item3[%d] "
+    //     "item4[%d] "
+    //     "item5[%d] "
+    //     "item6[%d] "
+    //     "item7[%d] "
+    //     "item8[%d] "
+    //     "item9[%d] "
+    //     "\n", tid, total_items, index,
+    //     index->num_items[0],
+    //     index->num_items[1],
+    //     index->num_items[2],
+    //     index->num_items[3],
+    //     index->num_items[4],
+    //     index->num_items[5],
+    //     index->num_items[6],
+    //     index->num_items[7],
+    //     index->num_items[8],
+    //     index->num_items[9]
+    //     );
+
+        // index->num_items[0] = txn->num_items[0];
+        // index->num_items[1] = txn->num_items[1];
+        // index->num_items[2] = txn->num_items[2];
+        // index->num_items[3] = txn->num_items[3];
+        // index->num_items[4] = txn->num_items[4];
+        // index->num_items[5] = txn->num_items[5];
+        // index->num_items[6] = txn->num_items[6];
+        // index->num_items[7] = txn->num_items[7];
+        // index->num_items[8] = txn->num_items[8];
+        // index->num_items[9] = txn->num_items[9];
+}
+
 __global__ void indexTpccTxnKernel(
     GpuTxnArray txn, GpuTxnArray index, tpccGpuIndexFindView index_view, uint32_t num_txns)
 {
@@ -387,6 +519,32 @@ __global__ void indexTpccTxnKernel(
     BaseTxn *index_ptr = index.getTxn(tid);
 
     index_ptr->txn_type = txn_ptr->txn_type;
+
+    TpccTxnType txn_type = static_cast<TpccTxnType>(txn_ptr->txn_type);
+    // if (txn_type == TpccTxnType::NEW_ORDER)
+    // {
+    //     indexTpccTxn(reinterpret_cast<NewOrderTxnInput<FixedSizeTxn> *>(txn_ptr->data),
+    //         reinterpret_cast<NewOrderTxnParams<FixedSizeTxn> *>(index_ptr->data), index_view, tid);
+    // } else if (txn_type == TpccTxnType::PAYMENT)
+    // {
+    //     indexTpccTxn(reinterpret_cast<PaymentTxnInput *>(txn_ptr->data),
+    //         reinterpret_cast<PaymentTxnParams *>(index_ptr->data), index_view, tid);
+    // } else if (txn_type == TpccTxnType::ORDER_STATUS)
+    // {
+    //     indexTpccTxn(reinterpret_cast<OrderStatusTxnInput *>(txn_ptr->data),
+    //         reinterpret_cast<OrderStatusTxnParams *>(index_ptr->data), index_view, tid);
+    // } else
+    //     if (txn_type == TpccTxnType::DELIVERY)
+    // {
+    //     indexTpccTxn(reinterpret_cast<DeliveryTxnInput *>(txn_ptr->data),
+    //     reinterpret_cast<DeliveryTxnParams *>(index_ptr->data), index_view, tid);
+    // }
+    // else
+    // {
+    //         printf("tid[%d] TxnType %d not supported\n", tid, txn_ptr->txn_type);
+    //         assert(false);
+    // }
+    //
     switch (static_cast<TpccTxnType>(txn_ptr->txn_type))
     {
     case TpccTxnType::NEW_ORDER:
@@ -400,8 +558,14 @@ __global__ void indexTpccTxnKernel(
     case TpccTxnType::ORDER_STATUS:
         indexTpccTxn(reinterpret_cast<OrderStatusTxnInput *>(txn_ptr->data),
             reinterpret_cast<OrderStatusTxnParams *>(index_ptr->data), index_view, tid);
+        break;
+    case TpccTxnType::DELIVERY:
+        indexTpccTxn(reinterpret_cast<DeliveryTxnInput *>(txn_ptr->data),
+        reinterpret_cast<DeliveryTxnParams *>(index_ptr->data), index_view, tid);
+        break;
     default:
         /* TODO: implement prepare insert for the rest of txn types */
+            assert(false);
         break;
     }
 }

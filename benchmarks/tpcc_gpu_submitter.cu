@@ -12,6 +12,7 @@
 #include <thrust/iterator/iterator_adaptor.h>
 #include <cub/cub.cuh>
 #include <cub/device/device_scan.cuh>
+#include <thrust/system/cuda/detail/reduce.h>
 
 namespace epic::tpcc {
 
@@ -105,7 +106,7 @@ static __device__ __forceinline__ void prepareSubmitTpccTxn(int txn_id, PaymentT
     num_ops.stock_num_ops[txn_id] = 0;
 }
 
-static __device__ void prepareSubmitTpccTxn(int txn_id, OrderStatusTxnParams *txn, TpccNumOps num_ops)
+static __device__ __forceinline__ void prepareSubmitTpccTxn(int txn_id, OrderStatusTxnParams *txn, TpccNumOps num_ops)
 {
     num_ops.warehouse_num_ops[txn_id] = 0;
     num_ops.district_num_ops[txn_id] = 0;
@@ -116,6 +117,54 @@ static __device__ void prepareSubmitTpccTxn(int txn_id, OrderStatusTxnParams *tx
     num_ops.order_line_num_ops[txn_id] = txn->num_items;
     num_ops.item_num_ops[txn_id] = 0;
     num_ops.stock_num_ops[txn_id] = 0;
+}
+
+static void __device__ __forceinline__ prepareSubmitTpccTxn(int txn_id, DeliveryTxnParams *txn, TpccNumOps num_ops)
+{
+    int orderline_ops = 0;
+    for (int i = 0; i < 10; ++i)
+    {
+        orderline_ops += txn->num_items[i];
+    }
+    // printf("txn[%d] submit total_items[%d] ptr[%p] "
+    //     "item0[%d] "
+    //     "item1[%d] "
+    //     "item2[%d] "
+    //     "item3[%d] "
+    //     "item4[%d] "
+    //     "item5[%d] "
+    //     "item6[%d] "
+    //     "item7[%d] "
+    //     "item8[%d] "
+    //     "item9[%d] "
+    //     "\n", txn_id, orderline_ops, txn,
+    //     txn->num_items[0],
+    //     txn->num_items[1],
+    //     txn->num_items[2],
+    //     txn->num_items[3],
+    //     txn->num_items[4],
+    //     txn->num_items[5],
+    //     txn->num_items[6],
+    //     txn->num_items[7],
+    //     txn->num_items[8],
+    //     txn->num_items[9]
+    //     );
+    //
+    num_ops.warehouse_num_ops[txn_id] = 0;
+    num_ops.district_num_ops[txn_id] = 0;
+    num_ops.customer_num_ops[txn_id] = 20;
+    num_ops.history_num_ops[txn_id] = 0;
+    num_ops.order_num_ops[txn_id] = 20;
+    num_ops.new_order_num_ops[txn_id] = 10;
+    num_ops.order_line_num_ops[txn_id] = orderline_ops * 2;
+    num_ops.item_num_ops[txn_id] = 0;
+    num_ops.stock_num_ops[txn_id] = 0;
+
+    // num_ops.new_order_num_ops[txn_id] = 0;
+    // num_ops.customer_num_ops[txn_id] = 0;
+    // num_ops.order_num_ops[txn_id] = 0; // TODO: remove
+    // num_ops.order_line_num_ops[txn_id] = 0; // TODO: remove
+    // num_ops.order_line_num_ops[txn_id] = 0; // TODO: remove
 }
 
 static __global__ void prepareSubmitTpccTxn(TxnArray<TpccTxnParam> txn_array, TpccNumOps num_ops)
@@ -138,7 +187,7 @@ static __global__ void prepareSubmitTpccTxn(TxnArray<TpccTxnParam> txn_array, Tp
         prepareSubmitTpccTxn(txn_id, reinterpret_cast<OrderStatusTxnParams *>(base_txn->data), num_ops);
         break;
     case TpccTxnType::DELIVERY:
-        /* TODO: implement prepare submit for delivery */
+        prepareSubmitTpccTxn(txn_id, reinterpret_cast<DeliveryTxnParams *>(base_txn->data), num_ops);
         break;
     case TpccTxnType::STOCK_LEVEL:
         /* TODO: implement prepare submit for stock level */
@@ -213,6 +262,40 @@ static __device__ __forceinline__ void submitTpccTxn(int txn_id, OrderStatusTxnP
     }
 }
 
+static __device__ __forceinline__ void submitTpccTxn(int txn_id, DeliveryTxnParams *txn, TpccSubmitLocations submit_loc)
+{
+    int orderline_ops = 0;
+    for (int i = 0; i < 10; ++i)
+    {
+        int loc_offset = i * 2;
+        static_cast<uint64_t *>(submit_loc.customer_dest)[submit_loc.customer_offset[txn_id] + loc_offset] = CREATE_OP(
+            txn->customer_id[i], txn_id, read_op, offsetof(DeliveryTxnExecPlan, customer_read_locs[i]) / sizeof(uint32_t));
+        static_cast<uint64_t *>(submit_loc.customer_dest)[submit_loc.customer_offset[txn_id] + loc_offset + 1] = CREATE_OP(
+            txn->customer_id[i], txn_id, write_op, offsetof(DeliveryTxnExecPlan, customer_write_locs[i]) / sizeof(uint32_t));
+
+        static_cast<uint64_t *>(submit_loc.new_order_dest)[submit_loc.new_order_offset[txn_id] + i] = CREATE_OP(
+            txn->new_order_id[i], txn_id, read_op, offsetof(DeliveryTxnExecPlan, new_order_read_locs[i]) / sizeof(uint32_t));
+
+        static_cast<uint64_t *>(submit_loc.order_dest)[submit_loc.order_offset[txn_id] + loc_offset] = CREATE_OP(
+            txn->order_id[i], txn_id, read_op, offsetof(DeliveryTxnExecPlan, order_read_locs[i]) / sizeof(uint32_t));
+        static_cast<uint64_t *>(submit_loc.order_dest)[submit_loc.order_offset[txn_id] + loc_offset + 1] = CREATE_OP(
+            txn->order_id[i], txn_id, write_op, offsetof(DeliveryTxnExecPlan, order_write_locs[i]) / sizeof(uint32_t));
+
+
+        for (int j = 0; j < txn->num_items[i]; ++j)
+        {
+            static_cast<uint64_t *>(submit_loc.order_line_dest)[submit_loc.order_line_offset[txn_id] + orderline_ops] =
+                CREATE_OP(txn->orderline_ids[i][j], txn_id, read_op,
+                    offsetof(DeliveryTxnExecPlan, orderline_read_locs[i][j]) / sizeof(uint32_t));
+            orderline_ops++;
+            static_cast<uint64_t *>(submit_loc.order_line_dest)[submit_loc.order_line_offset[txn_id] + orderline_ops] =
+                CREATE_OP(txn->orderline_ids[i][j], txn_id, write_op,
+                    offsetof(DeliveryTxnExecPlan, orderline_write_locs[i][j]) / sizeof(uint32_t));
+            orderline_ops++;
+        }
+    }
+}
+
 static __global__ void submitTpccTxn(TxnArray<TpccTxnParam> txn_array, TpccSubmitLocations submit_loc)
 {
     int txn_id = blockIdx.x * blockDim.x + threadIdx.x;
@@ -233,7 +316,7 @@ static __global__ void submitTpccTxn(TxnArray<TpccTxnParam> txn_array, TpccSubmi
         submitTpccTxn(txn_id, reinterpret_cast<OrderStatusTxnParams *>(base_txn->data), submit_loc);
         break;
     case TpccTxnType::DELIVERY:
-        /* TODO: implement submit for delivery */
+        submitTpccTxn(txn_id, reinterpret_cast<DeliveryTxnParams *>(base_txn->data), submit_loc);
         break;
     case TpccTxnType::STOCK_LEVEL:
         /* TODO: implement submit for stock level */

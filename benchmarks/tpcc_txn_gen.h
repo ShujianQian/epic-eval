@@ -41,8 +41,9 @@ public:
 class TpccOIdGenerator
 {
     uint32_t next_oid_counter[256][20]{};
+    uint32_t next_deliver_oid_counter[256]{};
 public:
-    explicit TpccOIdGenerator(uint32_t initial_orders_per_district = 3000)
+    explicit TpccOIdGenerator(uint32_t initial_orders_per_district = 3000, uint32_t initial_delivered_orders_per_district = 2100)
     {
         for (size_t i = 0; i < 256; ++i)
         {
@@ -50,6 +51,7 @@ public:
             {
                 next_oid_counter[i][j] = initial_orders_per_district;
             }
+            next_deliver_oid_counter[i] = initial_delivered_orders_per_district;
         }
     }
     inline uint32_t getOId(uint32_t timestamp)
@@ -65,13 +67,23 @@ public:
     inline uint32_t currOId(uint32_t w_id, uint32_t d_id) {
         return next_oid_counter[w_id][d_id];
     }
+
+    inline uint32_t nextDeliverOId(const uint32_t w_id)
+    {
+        uint32_t retval = ++next_deliver_oid_counter[w_id];
+        for (int d_id = 0; d_id < 10; ++d_id)
+        {
+            assert(retval < next_oid_counter[w_id][d_id]);
+        }
+        return retval;
+    }
 };
 
 struct TpccTxnGenerator
 {
     std::mt19937_64 gen;
     std::uniform_int_distribution<uint32_t> txn_type_dist, w_id_dist, d_id_dist, num_item_dist, percentage_gen,
-        order_quantity_dist, payment_amount_dist;
+        order_quantity_dist, payment_amount_dist, carrier_id_dist;
     TpccNuRand c_id_dist, i_id_dist;
     TpccOIdGenerator o_id_gen;
 
@@ -88,6 +100,7 @@ struct TpccTxnGenerator
         , percentage_gen(1, 100)
         , order_quantity_dist(1, 10)
         , payment_amount_dist(1, 5000)
+        , carrier_id_dist(1, 10)
         , config(config)
     {}
 
@@ -95,8 +108,8 @@ struct TpccTxnGenerator
     void generateTxn(NewOrderTxnInput<FixedSizeTxn> *txn, uint32_t timestamp);
     void generateTxn(PaymentTxnInput *txn, uint32_t timestamp);
     void generateTxn(OrderStatusTxnInput *txn, uint32_t timestamp);
-    void generateTxn(DeliveryTxn *txn, uint32_t timestamp);
-    void generateTxn(StockLevelTxn *txn, uint32_t timestamp);
+    void generateTxn(DeliveryTxnInput *txn, uint32_t timestamp);
+    void generateTxn(StockLevelTxnInput *txn, uint32_t timestamp);
     void generateTxn(BaseTxn *txn, uint32_t timestamp);
 };
 

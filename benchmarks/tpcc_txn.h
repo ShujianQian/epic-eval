@@ -156,14 +156,49 @@ struct OrderStatusTxnExecPlan
     uint32_t orderline_locs[15];
 };
 
-class DeliveryTxn
+struct DeliveryTxnInput
 {
-    /* TODO: implement delivery txn */
+    uint32_t w_id;
+    uint32_t carrier_id;
+    uint32_t delivery_d;
+    uint32_t o_id; // since the deliver order delivers all districts, the order id is the same across all districts
+    uint32_t num_items[10];
+    uint32_t customers[10];
 };
 
-class StockLevelTxn
+struct DeliveryTxnParams
+{
+    uint32_t carrier_id;
+    uint32_t delivery_d;
+    uint32_t new_order_id[10];
+    uint32_t order_id[10];
+    uint32_t customer_id[10];
+    uint32_t orderline_ids[10][15];
+    uint32_t num_items[10];
+};
+
+struct DeliveryTxnExecPlan
+{
+    uint32_t new_order_read_locs[10];
+    uint32_t order_read_locs[10];
+    uint32_t order_write_locs[10];
+    uint32_t customer_read_locs[10];
+    uint32_t customer_write_locs[10];
+    uint32_t orderline_read_locs[10][15];
+    uint32_t orderline_write_locs[10][15];
+};
+
+struct StockLevelTxnInput
 {
     /* TODO: implement stock-level txn */
+};
+
+struct StockLevelTxnParams
+{
+};
+
+struct StockLevelTxnExecPlan
+{
 };
 
 /**
@@ -174,8 +209,8 @@ union TpccTxn
     NewOrderTxnInput<FixedSizeTxn> new_order_txn;
     PaymentTxnInput payment_txn;
     OrderStatusTxnInput order_status_txn;
-    DeliveryTxn delivery_txn;
-    StockLevelTxn stock_level_txn;
+    DeliveryTxnInput delivery_txn;
+    StockLevelTxnInput stock_level_txn;
 };
 
 union TpccTxnParam
@@ -183,6 +218,8 @@ union TpccTxnParam
     NewOrderTxnParams<FixedSizeTxn> new_order_txn;
     PaymentTxnParams payment_txn;
     OrderStatusTxnParams order_status_txn;
+    DeliveryTxnParams delivery_txn;
+    StockLevelTxnParams stock_level_txn;
 } __attribute__((aligned(4)));
 
 union TpccExecPlan
@@ -190,6 +227,8 @@ union TpccExecPlan
     NewOrderExecPlan<FixedSizeTxn> new_order_txn;
     PaymentTxnExecPlan payment_txn;
     OrderStatusTxnExecPlan order_status_txn;
+    DeliveryTxnExecPlan delivery_txn;
+    StockLevelTxnExecPlan stock_level_txn;
 } __attribute__((aligned(4)));
 
 /* TODO: how to implement piece exection on GPU? */
@@ -197,7 +236,7 @@ void runTransaction(BaseTxn *txn);
 void runTransaction(NewOrderTxnInput<FixedSizeTxn> *txn);
 void runTransaction(PaymentTxnInput *txn);
 void runTransaction(OrderStatusTxnInput *txn);
-void runTransaction(DeliveryTxn *txn);
+void runTransaction(DeliveryTxnInput *txn);
 } // namespace epic::tpcc
 
 #endif // TPCC_TXN_H
