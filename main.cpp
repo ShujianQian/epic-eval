@@ -81,6 +81,7 @@ int main(int argc, char **argv)
                 // tpcc_config.txn_mix = {45, 43, 12, 0, 0};
                 tpcc_config.txn_mix = {45, 43, 8, 4, 0};
                 // tpcc_config.txn_mix = {50, 49, 0, 1, 0};
+                tpcc_config.txn_mix = {45, 43, 4, 4, 4};
             }
             else
             {

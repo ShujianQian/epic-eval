@@ -83,7 +83,7 @@ struct TpccTxnGenerator
 {
     std::mt19937_64 gen;
     std::uniform_int_distribution<uint32_t> txn_type_dist, w_id_dist, d_id_dist, num_item_dist, percentage_gen,
-        order_quantity_dist, payment_amount_dist, carrier_id_dist;
+        order_quantity_dist, payment_amount_dist, carrier_id_dist, threshold_dist;
     TpccNuRand c_id_dist, i_id_dist;
     TpccOIdGenerator o_id_gen;
 
@@ -101,6 +101,7 @@ struct TpccTxnGenerator
         , order_quantity_dist(1, 10)
         , payment_amount_dist(1, 5000)
         , carrier_id_dist(1, 10)
+        , threshold_dist(10, 20)
         , config(config)
     {}
 

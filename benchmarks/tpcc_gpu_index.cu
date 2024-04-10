@@ -506,6 +506,33 @@ void __device__ __forceinline__ indexTpccTxn(DeliveryTxnInput *txn, DeliveryTxnP
         // index->num_items[9] = txn->num_items[9];
 }
 
+void __device__ __forceinline__ indexTpccTxn(StockLevelTxnInput *txn, StockLevelTxnParams *index, tpccGpuIndexFindView index_view, uint32_t tid)
+{
+    uint32_t num_unique_items = 0;
+    StockKey stock_key;
+    stock_key.key.s_w_id = txn->w_id;
+    for (int i = 0; i < txn->num_items; ++i)
+    {
+        if (i > 0 && txn->items[i] == txn->items[i - 1])
+        {
+            continue;
+        }
+        stock_key.key.s_i_id = txn->items[i];
+        auto stock_found = index_view.stock_view.find(stock_key.base_key);
+        if (stock_found != index_view.stock_view.end())
+        {
+            index->stock_ids[num_unique_items] = stock_found->second.load(cuda::std::memory_order_relaxed);
+        }
+        else
+        {
+            assert(false);
+        }
+        ++num_unique_items;
+    }
+    index->num_items = num_unique_items;
+    index->threshold = txn->threshold;
+}
+
 __global__ void indexTpccTxnKernel(
     GpuTxnArray txn, GpuTxnArray index, tpccGpuIndexFindView index_view, uint32_t num_txns)
 {
@@ -563,8 +590,11 @@ __global__ void indexTpccTxnKernel(
         indexTpccTxn(reinterpret_cast<DeliveryTxnInput *>(txn_ptr->data),
         reinterpret_cast<DeliveryTxnParams *>(index_ptr->data), index_view, tid);
         break;
+    case TpccTxnType::STOCK_LEVEL:
+        indexTpccTxn(reinterpret_cast<StockLevelTxnInput *>(txn_ptr->data),
+        reinterpret_cast<StockLevelTxnParams *>(index_ptr->data), index_view, tid);
+        break;
     default:
-        /* TODO: implement prepare insert for the rest of txn types */
             assert(false);
         break;
     }

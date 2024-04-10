@@ -253,6 +253,28 @@ void __device__ __forceinline__ gpuExecTpccTxn(TpccRecords records, TpccVersions
     }
 }
 
+void __device__ __forceinline__ gpuExecTpccTxn(TpccRecords records, TpccVersions versions, StockLevelTxnParams *params,
+    StockLevelTxnExecPlan *plan, uint32_t epoch, uint32_t lane_id, uint32_t txn_id)
+{
+    uint32_t num_low_stock = 0;
+    const uint32_t threshold = params->threshold;
+    uint32_t result;
+    constexpr uint32_t s_quantity_offset = offsetof(StockValue, s_quantity) / sizeof(uint32_t);
+    for (uint32_t i = 0; i < params->num_items; ++i)
+    {
+        gpuReadFromTableCoop(records.stock_record, versions.stock_version, params->stock_ids[i],
+            plan->stock_read_locs[i], epoch, result, lane_id);
+        if (lane_id == s_quantity_offset && result < threshold)
+        {
+            ++num_low_stock;
+        }
+    }
+    if (lane_id == s_quantity_offset)
+    {
+        params->num_low_stock = num_low_stock;
+    }
+}
+
 __global__ void gpuExecKernel(
     TpccRecords records, TpccVersions versions, GpuTxnArray txn, GpuTxnArray plan, uint32_t num_txns, uint32_t epoch)
 {
@@ -348,8 +370,11 @@ __global__ void gpuExecKernel(
         gpuExecTpccTxn(records, versions, reinterpret_cast<DeliveryTxnParams *>(txn_param_ptr->data),
             reinterpret_cast<DeliveryTxnExecPlan *>(exec_plan_ptr->data), epoch, lane_id, warp_txn_id);
             break;
+    case TpccTxnType::STOCK_LEVEL:
+        gpuExecTpccTxn(records, versions, reinterpret_cast<StockLevelTxnParams *>(txn_param_ptr->data),
+            reinterpret_cast<StockLevelTxnExecPlan *>(exec_plan_ptr->data), epoch, lane_id, warp_txn_id);
     default:
-        /* TODO: implement execution for the rest of txn types */
+        assert(false);
         break;
     }
 }

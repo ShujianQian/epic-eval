@@ -121,7 +121,10 @@ void TpccTxnGenerator::generateTxn(DeliveryTxnInput *txn, uint32_t timestamp)
 
 void TpccTxnGenerator::generateTxn(StockLevelTxnInput *txn, uint32_t timestamp)
 {
-    /* TODO: generate stock-level txn */
+    txn->w_id = w_id_dist(gen);
+    txn->d_id = d_id_dist(gen);
+    txn->o_id = o_id_gen.currOId(txn->w_id - 1, txn->d_id - 1);
+    txn->threshold = threshold_dist(gen);
 }
 
 void TpccTxnGenerator::generateTxn(BaseTxn *txn, uint32_t timestamp)

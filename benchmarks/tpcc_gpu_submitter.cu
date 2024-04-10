@@ -167,6 +167,19 @@ static void __device__ __forceinline__ prepareSubmitTpccTxn(int txn_id, Delivery
     // num_ops.order_line_num_ops[txn_id] = 0; // TODO: remove
 }
 
+static void __device__ __forceinline__ prepareSubmitTpccTxn(int txn_id, StockLevelTxnParams *txn, TpccNumOps num_ops)
+{
+    num_ops.warehouse_num_ops[txn_id] = 0;
+    num_ops.district_num_ops[txn_id] = 0;
+    num_ops.customer_num_ops[txn_id] = 0;
+    num_ops.history_num_ops[txn_id] = 0;
+    num_ops.order_num_ops[txn_id] = 0;
+    num_ops.new_order_num_ops[txn_id] = 0;
+    num_ops.order_line_num_ops[txn_id] = 0;
+    num_ops.item_num_ops[txn_id] = 0;
+    num_ops.stock_num_ops[txn_id] = txn->num_items;
+}
+
 static __global__ void prepareSubmitTpccTxn(TxnArray<TpccTxnParam> txn_array, TpccNumOps num_ops)
 {
     int txn_id = blockIdx.x * blockDim.x + threadIdx.x;
@@ -190,7 +203,7 @@ static __global__ void prepareSubmitTpccTxn(TxnArray<TpccTxnParam> txn_array, Tp
         prepareSubmitTpccTxn(txn_id, reinterpret_cast<DeliveryTxnParams *>(base_txn->data), num_ops);
         break;
     case TpccTxnType::STOCK_LEVEL:
-        /* TODO: implement prepare submit for stock level */
+        prepareSubmitTpccTxn(txn_id, reinterpret_cast<StockLevelTxnParams *>(base_txn->data), num_ops);
         break;
     default:
         assert(false);
@@ -296,6 +309,17 @@ static __device__ __forceinline__ void submitTpccTxn(int txn_id, DeliveryTxnPara
     }
 }
 
+static __device__ __forceinline__ void submitTpccTxn(
+    int txn_id, StockLevelTxnParams *txn, TpccSubmitLocations submit_loc)
+{
+    uint32_t stock_offset = submit_loc.stock_offset[txn_id];
+    for (uint32_t i = 0; i < txn->num_items; ++i)
+    {
+        static_cast<uint64_t *>(submit_loc.stock_dest)[stock_offset + i] = CREATE_OP(
+            txn->stock_ids[i], txn_id, read_op, offsetof(StockLevelTxnExecPlan, stock_read_locs[i]) / sizeof(uint32_t));
+    }
+}
+
 static __global__ void submitTpccTxn(TxnArray<TpccTxnParam> txn_array, TpccSubmitLocations submit_loc)
 {
     int txn_id = blockIdx.x * blockDim.x + threadIdx.x;
@@ -319,7 +343,7 @@ static __global__ void submitTpccTxn(TxnArray<TpccTxnParam> txn_array, TpccSubmi
         submitTpccTxn(txn_id, reinterpret_cast<DeliveryTxnParams *>(base_txn->data), submit_loc);
         break;
     case TpccTxnType::STOCK_LEVEL:
-        /* TODO: implement submit for stock level */
+        submitTpccTxn(txn_id, reinterpret_cast<StockLevelTxnParams *>(base_txn->data), submit_loc);
         break;
     default:
         assert(false);
