@@ -262,14 +262,14 @@ void __global__ perform_range_queries_kernel(GpuTxnArray txns, GpuTxnArray index
                 /* verify against cpu aux index */
                 // if (dl_txn_ptr->num_items[tile.thread_rank()] != order_num_items[cache_idx])
                 // {
-                //     printf("ERROR: delivery txn[%d][%d] cpu_num_items[%d] gpu[%d]\n",
-                //         thread_id - tile.thread_rank() + curr_rank, tile.thread_rank(),
-                //         dl_txn_ptr->num_items[tile.thread_rank()], order_num_items[cache_idx]);
+                //     printf("ERROR: delivery txn[%d] w[%d]d[%d] oid[%d] cpu_num_items[%d] gpu[%d]\n",
+                //         thread_id - tile.thread_rank() + curr_rank, dl_txn_ptr->w_id, tile.thread_rank() + 1,
+                //         dl_txn_ptr->o_id, dl_txn_ptr->num_items[tile.thread_rank()], order_num_items[cache_idx]);
                 // }
                 // if (dl_txn_ptr->customers[tile.thread_rank()] != order_customers[cache_idx])
                 // {
-                //     printf("ERROR: delivery txn[%d][%d] cpu_customer[%d] gpu_[%d]\n",
-                //         thread_id - tile.thread_rank() + curr_rank, tile.thread_rank(),
+                //     printf("ERROR: delivery txn[%d] w[%d]d[%d] cpu_customer[%d] gpu_[%d]\n",
+                //         thread_id - tile.thread_rank() + curr_rank, dl_txn_ptr->w_id, tile.thread_rank() + 1,
                 //         dl_txn_ptr->customers[tile.thread_rank()], order_customers[cache_idx]);
                 // }
 
@@ -314,17 +314,17 @@ void __global__ perform_range_queries_kernel(GpuTxnArray txns, GpuTxnArray index
             // {
             //     if (items_cnt != sl_txn_ptr->num_items)
             //     {
-            //         printf("ERROR: stock_level txn[%d] cpu_num_items[%d] gpu_[%d]\n",
-            //             thread_id - tile.thread_rank() + curr_rank, sl_txn_ptr->num_items,
+            //         printf("ERROR: stock_level txn[%d] w[%d] cpu_num_items[%d] gpu_[%d]\n",
+            //             thread_id - tile.thread_rank() + curr_rank, sl_txn_ptr->w_id, sl_txn_ptr->num_items,
             //             items_cnt);
             //     }
             //     for (int i = 0; i < sl_txn_ptr->num_items; ++i)
             //     {
-            //         if (sl_txn_ptr->items[i] != sl_param_ptr->stock_ids[i])
+            //         if (sl_txn_ptr->o_id - 19 > 3000 && sl_txn_ptr->items[i] != sl_param_ptr->stock_ids[i])
             //         {
-            //             printf("ERROR: stock_level txn[%d][%d] oid[%d] cpu_item[%d] gpu_[%d]\n",
-            //                 thread_id - tile.thread_rank() + curr_rank, i, sl_txn_ptr->o_id, sl_txn_ptr->items[i],
-            //                 sl_param_ptr->stock_ids[i]);
+            //             printf("ERROR: stock_level txn[%d] w[%d]d[%d] item[%d] oid[%d] cpu_item[%d] gpu_[%d]\n",
+            //                 thread_id - tile.thread_rank() + curr_rank, sl_txn_ptr->w_id, sl_txn_ptr->d_id, i,
+            //                 sl_txn_ptr->o_id - 19, sl_txn_ptr->items[i], sl_param_ptr->stock_ids[i]);
             //         }
             //     }
             // }
@@ -357,7 +357,7 @@ class TpccGpuAuxIndexImpl
 public:
     explicit TpccGpuAuxIndexImpl(TpccConfig &config)
         : config{config}
-        , num_slots_per_district(config.num_txns / config.num_warehouses / 10 * config.epochs)
+        , num_slots_per_district(config.num_txns / config.num_warehouses / 10 * config.epochs + 3000)
         , num_slots(num_slots_per_district * config.num_warehouses * 10)
         , order_num_items(cuda_allocator<uint32_t>().allocate(num_slots))
         , order_customers(cuda_allocator<uint32_t>().allocate(num_slots))

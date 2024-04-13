@@ -28,7 +28,7 @@ private:
 public:
     explicit TpccCpuAuxIndex(TpccConfig &config)
         : config(config)
-        , num_slots_per_district(config.num_txns / config.num_warehouses / 10 * config.epochs)
+        , num_slots_per_district(config.num_txns / config.num_warehouses / 10 * config.epochs + 3000)
         , order_num_items(config.num_warehouses * 10 * num_slots_per_district, 0)
         , order_customers(config.num_warehouses * 10 * num_slots_per_district, 0)
         , order_items(config.num_warehouses * 10 * num_slots_per_district)

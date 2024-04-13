@@ -448,7 +448,8 @@ void __device__ __forceinline__ indexTpccTxn(DeliveryTxnInput *txn, DeliveryTxnP
             }
             else
             {
-                printf("Order line not found wid[%d] did[%d] oid[%d] olid[%d]\n", txn->w_id, i+ 1, txn->o_id, j + 1);
+                // printf("Order line not found wid[%d] did[%d] oid[%d] olid[%d] num_txns[%d]\n", txn->w_id, i + 1,
+                //     txn->o_id, j + 1, txn->num_items[i]);
                 assert(false);
             }
 
