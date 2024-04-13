@@ -45,6 +45,7 @@ TpccDb::TpccDb(TpccConfig config)
     , execution_param_input(config.num_txns, config.execution_device, false)
     , execution_plan_input(config.num_txns, config.execution_device, false)
     , cpu_aux_index(config)
+    , gpu_aux_index(config)
 {
     //    index = std::make_shared<TpccCpuIndex>(config);
     for (int i = 0; i < config.epochs; ++i)
@@ -313,7 +314,8 @@ void TpccDb::generateTxns()
 void TpccDb::loadInitialData()
 {
     index->loadInitialData();
-    cpu_aux_index.loadInitialData();
+    // cpu_aux_index.loadInitialData(); /* cpu aux index replace by gpu aux index */
+    gpu_aux_index.loadInitialData();
 }
 
 void TpccDb::runBenchmark()
@@ -329,8 +331,9 @@ void TpccDb::runBenchmark()
             start_time = std::chrono::high_resolution_clock::now();
 
             uint32_t index_epoch_id = epoch_id - 1;
-            cpu_aux_index.insertTxnUpdates(txn_array[index_epoch_id], epoch_id);
-            cpu_aux_index.performRangeQueries(txn_array[index_epoch_id], epoch_id);
+            /* cpu_aux_index replaced by gpu_aux_index */
+            // cpu_aux_index.insertTxnUpdates(txn_array[index_epoch_id], epoch_id);
+            // cpu_aux_index.performRangeQueries(txn_array[index_epoch_id], epoch_id);
 
             end_time = std::chrono::high_resolution_clock::now();
             logger.Info("Epoch {} cpu aux index time: {} us", epoch_id,
@@ -366,6 +369,25 @@ void TpccDb::runBenchmark()
 #endif
             end_time = std::chrono::high_resolution_clock::now();
             logger.Info("Epoch {} index_transfer time: {} us", epoch_id,
+                std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count());
+        }
+
+        /* gpu aux index */
+        {
+
+            start_time = std::chrono::high_resolution_clock::now();
+            uint32_t index_epoch_id = epoch_id - 1;
+
+            gpu_aux_index.insertTxnUpdates(index_input, index_epoch_id);
+
+            end_time = std::chrono::high_resolution_clock::now();
+            logger.Info("Epoch {} gpu aux index time: {} us", epoch_id,
+                std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count());
+
+            start_time = std::chrono::high_resolution_clock::now();
+            gpu_aux_index.performRangeQueries(index_input, index_output, index_epoch_id);
+            end_time = std::chrono::high_resolution_clock::now();
+            logger.Info("Epoch {} gpu aux index part2 time: {} us", epoch_id,
                 std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count());
         }
 

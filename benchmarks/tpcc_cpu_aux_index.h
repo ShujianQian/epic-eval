@@ -150,6 +150,8 @@ public:
 
     void performRangeQueries(TxnArray<TpccTxn> &txns, size_t epoch)
     {
+        /* cpu_aux_index replaced by gpu_aux_index */
+        /*
         std::atomic<uint32_t> txn_id = 0;
         std::vector<std::thread> threads;
         threads.reserve(config.cpu_exec_num_threads);
@@ -237,6 +239,7 @@ public:
         {
             t.join();
         }
+        */
     }
 };
 

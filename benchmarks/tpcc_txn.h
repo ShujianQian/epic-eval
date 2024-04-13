@@ -195,7 +195,7 @@ struct StockLevelTxnInput
     uint32_t o_id; // order id of the last txn in the district, will check the last 20 txns
     uint32_t threshold;
     uint32_t num_items;
-    uint32_t items[300]; // TODO: this is too massive to transfer, need to be delegated to the GPU
+    // uint32_t items[300]; /* cpu_aux_index replaced by gpu_aux_index */
 };
 
 struct StockLevelTxnParams
@@ -203,7 +203,7 @@ struct StockLevelTxnParams
     uint32_t num_items;
     uint32_t threshold;
     uint32_t num_low_stock;
-    uint32_t stock_ids[300];
+    uint32_t stock_ids[304]; /* this should be a multiple of 16 for gpu_aux_index WarpMergeSort */
 };
 
 struct StockLevelTxnExecPlan

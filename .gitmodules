@@ -10,3 +10,6 @@
 [submodule "third_party/masstree"]
 	path = third_party/masstree
 	url = git@github.com:uoft-felis/masstree.git
+[submodule "third_party/gpubtree"]
+	path = third_party/gpubtree
+	url = git@github.com:ShujianQian/MVGpuBTree.git

@@ -63,7 +63,9 @@ set(EPIC_GPU_SOURCE
         benchmarks/tpcc_gpu_index.cu
         benchmarks/ycsb_gpu_index.cu
         benchmarks/ycsb_gpu_submitter.cu
-        benchmarks/ycsb_gpu_executor.cu)
+        benchmarks/ycsb_gpu_executor.cu
+        benchmarks/tpcc_gpu_aux_index.cu
+)
 
 set(GACCO_GPU_SOURCE
     gacco/gpu_execution_planner.cu
@@ -78,7 +80,13 @@ else ()
     set(EPIC_SOURCE ${EPIC_CPU_SOURCE} ${GACCO_CPU_SOURCE})
 endif ()
 
-include_directories(${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/gpu_src ${CMAKE_SOURCE_DIR}/third_party/spdlog/include ${CMAKE_SOURCE_DIR}/third_party/masstree)
+include_directories(
+        ${CMAKE_SOURCE_DIR}
+        ${CMAKE_SOURCE_DIR}/gpu_src
+        ${CMAKE_SOURCE_DIR}/third_party/spdlog/include
+        ${CMAKE_SOURCE_DIR}/third_party/masstree
+        ${CMAKE_SOURCE_DIR}/third_party/gpubtree/include
+)
 if (CUDA_FOUND)
     include_directories(${CMAKE_SOURCE_DIR}/third_party/cuco/include)
 endif()

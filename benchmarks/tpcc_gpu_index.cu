@@ -511,13 +511,16 @@ void __device__ __forceinline__ indexTpccTxn(StockLevelTxnInput *txn, StockLevel
     uint32_t num_unique_items = 0;
     StockKey stock_key;
     stock_key.key.s_w_id = txn->w_id;
+    uint32_t prev_item = 0;
     for (int i = 0; i < txn->num_items; ++i)
     {
-        if (i > 0 && txn->items[i] == txn->items[i - 1])
+        uint32_t curr_item = index->stock_ids[i];  // hack, stock_ids stores item id from gpu aux index
+        if (i > 0 && curr_item == prev_item)
         {
             continue;
         }
-        stock_key.key.s_i_id = txn->items[i];
+        prev_item = curr_item;
+        stock_key.key.s_i_id = curr_item;
         auto stock_found = index_view.stock_view.find(stock_key.base_key);
         if (stock_found != index_view.stock_view.end())
         {
