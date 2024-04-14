@@ -275,19 +275,32 @@ void __device__ __forceinline__ gpuExecTpccTxn(TpccRecords records, TpccVersions
     }
 }
 
+union CachableTxnParams
+{
+    NewOrderTxnParams<FixedSizeTxn> no;
+    PaymentTxnParams pmt;
+    OrderStatusTxnParams os;
+} __attribute__((aligned(4)));
+
+union CachableTxnExecPlan
+{
+    NewOrderExecPlan<FixedSizeTxn> no;
+    PaymentTxnExecPlan pmt;
+    OrderStatusTxnExecPlan os;
+} __attribute__((aligned(4)));
+
+static_assert(sizeof(CachableTxnExecPlan) + sizeof(CachableTxnParams) < 1000);
+
 __global__ void gpuExecKernel(
     TpccRecords records, TpccVersions versions, GpuTxnArray txn, GpuTxnArray plan, uint32_t num_txns, uint32_t epoch)
 {
     constexpr uint32_t leader_lane = 0;
     constexpr uint32_t all_lanes_mask = 0xffffffffu;
 
-    /* TODO: fix txn caching, stock_level and delivery cannot be cached */
-    /*
-    __shared__ uint8_t txn_param[num_warps][BaseTxnSize<TpccTxnParam>::value];
-    __shared__ uint8_t exec_plan[num_warps][BaseTxnSize<TpccExecPlan>::value];
-    static_assert(BaseTxnSize<TpccTxnParam>::value % sizeof(uint32_t) == 0, "Cannot be copied in 32-bit words");
-    static_assert(BaseTxnSize<TpccExecPlan>::value % sizeof(uint32_t) == 0, "Cannot be copied in 32-bit words");
-    */
+    __shared__ uint8_t cached_txn_param[num_warps][BaseTxnSize<CachableTxnParams>::value];
+    __shared__ uint8_t cached_exec_plan[num_warps][BaseTxnSize<CachableTxnExecPlan>::value];
+    static_assert(BaseTxnSize<CachableTxnParams>::value % sizeof(uint32_t) == 0, "Cannot be copied in 32-bit words");
+    static_assert(BaseTxnSize<CachableTxnExecPlan>::value % sizeof(uint32_t) == 0, "Cannot be copied in 32-bit words");
     __shared__ uint32_t warp_counter;
 
     uint32_t warp_id = threadIdx.x / kDeviceWarpSize;
@@ -314,57 +327,45 @@ __global__ void gpuExecKernel(
 
     /* load txn param and exec plan into shared memory */
     BaseTxn *txn_param_ptr = txn.getTxn(warp_txn_id);
-    // warpMemcpy(reinterpret_cast<uint32_t *>(txn_param[warp_id]), reinterpret_cast<uint32_t *>(txn_param_ptr),
-    //     BaseTxnSize<TpccTxnParam>::value / sizeof(uint32_t), lane_id);
     BaseTxn *exec_plan_ptr = plan.getTxn(warp_txn_id);
-    // warpMemcpy(reinterpret_cast<uint32_t *>(exec_plan[warp_id]), reinterpret_cast<uint32_t *>(exec_plan_ptr),
-    //     BaseTxnSize<TpccExecPlan>::value / sizeof(uint32_t), lane_id);
-    __syncwarp();
 
     /* execute the txn */
-    // switch (static_cast<TpccTxnType>((reinterpret_cast<BaseTxn *>(txn_param[warp_id])->txn_type)))
-    // {
-    // case TpccTxnType::NEW_ORDER:
-    //     gpuExecTpccTxn(records, versions,
-    //         reinterpret_cast<NewOrderTxnParams<FixedSizeTxn> *>(reinterpret_cast<BaseTxn *>(txn_param[warp_id])->data),
-    //         reinterpret_cast<NewOrderExecPlan<FixedSizeTxn> *>(reinterpret_cast<BaseTxn *>(exec_plan[warp_id])->data),
-    //         epoch, lane_id, warp_txn_id);
-    //     break;
-    // case TpccTxnType::PAYMENT:
-    //     gpuExecTpccTxn(records, versions,
-    //         reinterpret_cast<PaymentTxnParams *>(reinterpret_cast<BaseTxn *>(txn_param[warp_id])->data),
-    //         reinterpret_cast<PaymentTxnExecPlan *>(reinterpret_cast<BaseTxn *>(exec_plan[warp_id])->data), epoch,
-    //         lane_id, warp_txn_id);
-    //     break;
-    // case TpccTxnType::ORDER_STATUS:
-    //     gpuExecTpccTxn(records, versions,
-    //         reinterpret_cast<OrderStatusTxnParams *>(reinterpret_cast<BaseTxn *>(txn_param[warp_id])->data),
-    //         reinterpret_cast<OrderStatusTxnExecPlan *>(reinterpret_cast<BaseTxn *>(exec_plan[warp_id])->data), epoch,
-    //         lane_id, warp_txn_id);
-    //     break;
-    // default:
-    //     break;
-    // }
-
     switch (static_cast<TpccTxnType>((reinterpret_cast<BaseTxn *>(txn_param_ptr)->txn_type)))
     {
     case TpccTxnType::NEW_ORDER:
+        warpMemcpy(reinterpret_cast<uint32_t *>(cached_txn_param[warp_id]), reinterpret_cast<uint32_t *>(txn_param_ptr),
+            BaseTxnSize<NewOrderTxnParams<FixedSizeTxn>>::value / sizeof(uint32_t), lane_id);
+        warpMemcpy(reinterpret_cast<uint32_t *>(cached_exec_plan[warp_id]), reinterpret_cast<uint32_t *>(exec_plan_ptr),
+            BaseTxnSize<NewOrderExecPlan<FixedSizeTxn>>::value / sizeof(uint32_t), lane_id);
+        __syncwarp();
         gpuExecTpccTxn(records, versions,
-            reinterpret_cast<NewOrderTxnParams<FixedSizeTxn> *>(reinterpret_cast<BaseTxn *>(txn_param_ptr)->data),
-            reinterpret_cast<NewOrderExecPlan<FixedSizeTxn> *>(reinterpret_cast<BaseTxn *>(exec_plan_ptr)->data), epoch,
-            lane_id, warp_txn_id);
+            reinterpret_cast<NewOrderTxnParams<FixedSizeTxn> *>(
+                reinterpret_cast<BaseTxn *>(cached_txn_param[warp_id])->data),
+            reinterpret_cast<NewOrderExecPlan<FixedSizeTxn> *>(
+                reinterpret_cast<BaseTxn *>(cached_exec_plan[warp_id])->data),
+            epoch, lane_id, warp_txn_id);
         break;
     case TpccTxnType::PAYMENT:
+        warpMemcpy(reinterpret_cast<uint32_t *>(cached_txn_param[warp_id]), reinterpret_cast<uint32_t *>(txn_param_ptr),
+            BaseTxnSize<PaymentTxnParams>::value / sizeof(uint32_t), lane_id);
+        warpMemcpy(reinterpret_cast<uint32_t *>(cached_exec_plan[warp_id]), reinterpret_cast<uint32_t *>(exec_plan_ptr),
+            BaseTxnSize<PaymentTxnExecPlan>::value / sizeof(uint32_t), lane_id);
+        __syncwarp();
         gpuExecTpccTxn(records, versions,
-            reinterpret_cast<PaymentTxnParams *>(reinterpret_cast<BaseTxn *>(txn_param_ptr)->data),
-            reinterpret_cast<PaymentTxnExecPlan *>(reinterpret_cast<BaseTxn *>(exec_plan_ptr)->data), epoch, lane_id,
-            warp_txn_id);
+            reinterpret_cast<PaymentTxnParams *>(reinterpret_cast<BaseTxn *>(cached_txn_param[warp_id])->data),
+            reinterpret_cast<PaymentTxnExecPlan *>(reinterpret_cast<BaseTxn *>(cached_exec_plan[warp_id])->data), epoch,
+            lane_id, warp_txn_id);
         break;
     case TpccTxnType::ORDER_STATUS:
+        warpMemcpy(reinterpret_cast<uint32_t *>(cached_txn_param[warp_id]), reinterpret_cast<uint32_t *>(txn_param_ptr),
+            BaseTxnSize<OrderStatusTxnParams>::value / sizeof(uint32_t), lane_id);
+        warpMemcpy(reinterpret_cast<uint32_t *>(cached_exec_plan[warp_id]), reinterpret_cast<uint32_t *>(exec_plan_ptr),
+            BaseTxnSize<OrderStatusTxnExecPlan>::value / sizeof(uint32_t), lane_id);
+        __syncwarp();
         gpuExecTpccTxn(records, versions,
-            reinterpret_cast<OrderStatusTxnParams *>(reinterpret_cast<BaseTxn *>(txn_param_ptr)->data),
-            reinterpret_cast<OrderStatusTxnExecPlan *>(reinterpret_cast<BaseTxn *>(exec_plan_ptr)->data), epoch,
-            lane_id, warp_txn_id);
+            reinterpret_cast<OrderStatusTxnParams *>(reinterpret_cast<BaseTxn *>(cached_txn_param[warp_id])->data),
+            reinterpret_cast<OrderStatusTxnExecPlan *>(reinterpret_cast<BaseTxn *>(cached_exec_plan[warp_id])->data),
+            epoch, lane_id, warp_txn_id);
         break;
     case TpccTxnType::DELIVERY:
         gpuExecTpccTxn(records, versions, reinterpret_cast<DeliveryTxnParams *>(txn_param_ptr->data),
@@ -373,6 +374,7 @@ __global__ void gpuExecKernel(
     case TpccTxnType::STOCK_LEVEL:
         gpuExecTpccTxn(records, versions, reinterpret_cast<StockLevelTxnParams *>(txn_param_ptr->data),
             reinterpret_cast<StockLevelTxnExecPlan *>(exec_plan_ptr->data), epoch, lane_id, warp_txn_id);
+        break;
     default:
         assert(false);
         break;
