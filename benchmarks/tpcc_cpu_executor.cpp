@@ -110,10 +110,91 @@ void CpuExecutor::executionWorker(uint32_t epoch, uint32_t tid)
             executeTxn(reinterpret_cast<PaymentTxnParams *>(base_txn->data),
                 reinterpret_cast<PaymentTxnExecPlan *>(base_plan->data), epoch);
             break;
+        case TpccTxnType::ORDER_STATUS:
+            executeTxn(reinterpret_cast<OrderStatusTxnParams *>(base_txn->data),
+                reinterpret_cast<OrderStatusTxnExecPlan *>(base_plan->data), epoch);
+            break;
+        case TpccTxnType::DELIVERY:
+            executeTxn(reinterpret_cast<DeliveryTxnParams *>(base_txn->data),
+                reinterpret_cast<DeliveryTxnExecPlan *>(base_plan->data), epoch);
+            break;
+        case TpccTxnType::STOCK_LEVEL:
+            executeTxn(reinterpret_cast<StockLevelTxnParams *>(base_txn->data),
+                reinterpret_cast<StockLevelTxnExecPlan *>(base_plan->data), epoch);
+            break;
         default:
             throw std::runtime_error("Unsupported transaction type.");
         }
     }
+}
+
+void CpuExecutor::executeTxn(OrderStatusTxnParams *txn, OrderStatusTxnExecPlan *plan, uint32_t epoch)
+{
+    CustomerValue cv;
+    readFromTable(records.customer_record, versions.customer_version, txn->customer_id, plan->customer_loc, epoch, &cv);
+    OrderValue ov;
+    readFromTable(records.order_record, versions.order_version, txn->order_id, plan->order_loc, epoch, &ov);
+    for (int i = 0; i < txn->num_items; ++i)
+    {
+        OrderLineValue olv;
+        readFromTable(records.order_line_record, versions.order_line_version, txn->orderline_ids[i],
+            plan->orderline_locs[i], epoch, &olv);
+    }
+}
+
+void CpuExecutor::executeTxn(DeliveryTxnParams *txn, DeliveryTxnExecPlan *plan, uint32_t epoch)
+{
+
+    for (int i = 0; i < 10; ++i)
+    {
+        NewOrderValue nov;
+        readFromTable(records.new_order_record, versions.new_order_version, txn->new_order_id[i],
+            plan->new_order_read_locs[i], epoch, &nov);
+
+        OrderValue ov;
+        readFromTable(
+            records.order_record, versions.order_version, txn->order_id[i], plan->order_read_locs[i], epoch, &ov);
+        ov.o_carrier_id = txn->carrier_id;
+        writeToTable(
+            records.order_record, versions.order_version, txn->order_id[i], plan->order_write_locs[i], epoch, &ov);
+
+        uint32_t amount = 0;
+        for (int j = 0; j < txn->num_items[i]; ++j)
+        {
+            OrderLineValue olv;
+            readFromTable(records.order_line_record, versions.order_line_version, txn->orderline_ids[i][j],
+                plan->orderline_read_locs[i][j], epoch, &olv);
+            amount += olv.ol_amount;
+            olv.ol_delivery_d = txn->delivery_d;
+            writeToTable(records.order_line_record, versions.order_line_version, txn->orderline_ids[i][j],
+                plan->orderline_write_locs[i][j], epoch, &olv);
+        }
+
+        CustomerValue cv;
+        readFromTable(records.customer_record, versions.customer_version, txn->customer_id[i],
+            plan->customer_read_locs[i], epoch, &cv);
+        cv.c_balance += amount;
+        ++cv.c_delivery_cnt;
+        writeToTable(records.customer_record, versions.customer_version, txn->customer_id[i],
+            plan->customer_write_locs[i], epoch, &cv);
+    }
+}
+
+void CpuExecutor::executeTxn(StockLevelTxnParams *txn, StockLevelTxnExecPlan *plan, uint32_t epoch)
+{
+    uint32_t num_low_stock = 0;
+    const uint32_t threshold = txn->threshold;
+    StockValue sv;
+    for (int i = 0; i < txn->num_items; ++i)
+    {
+        readFromTable(
+            records.stock_record, versions.stock_version, txn->stock_ids[i], plan->stock_read_locs[i], epoch, &sv);
+        if (sv.s_quantity < threshold)
+        {
+            ++num_low_stock;
+        }
+    }
+    txn->num_low_stock = num_low_stock;
 }
 
 } // namespace epic::tpcc

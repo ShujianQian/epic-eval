@@ -23,6 +23,9 @@ private:
     void executionWorker(uint32_t epoch, uint32_t tid);
     void executeTxn(NewOrderTxnParams<FixedSizeTxn> *txn, NewOrderExecPlan<FixedSizeTxn> *plan, uint32_t epoch);
     void executeTxn(PaymentTxnParams *txn, PaymentTxnExecPlan *plan, uint32_t epoch);
+    void executeTxn(OrderStatusTxnParams *txn, OrderStatusTxnExecPlan *plan, uint32_t epoch);
+    void executeTxn(DeliveryTxnParams *txn, DeliveryTxnExecPlan *plan, uint32_t epoch);
+    void executeTxn(StockLevelTxnParams *txn, StockLevelTxnExecPlan *plan, uint32_t epoch);
 };
 
 } // namespace epic::tpcc
