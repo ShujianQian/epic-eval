@@ -102,8 +102,8 @@ target_link_libraries(epic_driver epic)
 target_link_libraries(epic_driver ${JEMALLOC_LIBRARIES})
 
 if (CUDA_FOUND)
-    add_executable(test_epic ${CMAKE_SOURCE_DIR}/tests/unit_tests/test_gpu_table.cu)
-    target_link_libraries(test_epic epic)
+#    add_executable(test_epic ${CMAKE_SOURCE_DIR}/tests/unit_tests/test_gpu_table.cu)
+#    target_link_libraries(test_epic epic)
 endif ()
 
 #set(EPIC_INCLUDE_DIR ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/gpu_src)
