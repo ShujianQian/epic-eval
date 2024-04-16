@@ -2,6 +2,7 @@
 // Created by Shujian Qian on 2023-11-08.
 //
 
+#include <gpu_txn.cuh>
 #include <gacco/benchmarks/tpcc_gpu_submitter.h>
 #include <gacco/gpu_execution_planner.h>
 #include <util_gpu_error_check.cuh>
@@ -136,14 +137,14 @@ static __device__ __forceinline__ void prepareSubmitTpccTxn(
     num_ops.stock_num_ops[txn_id] = 0;
 }
 
-static __global__ void prepareSubmitTpccTxn(TxnArray<TpccTxnParam> txn_array, TpccNumOps num_ops, TpccConfig config)
+static __global__ void prepareSubmitTpccTxn(epic::GpuPackedTxnArray txn_array, TpccNumOps num_ops, TpccConfig config)
 {
     int txn_id = blockIdx.x * blockDim.x + threadIdx.x;
     if (txn_id >= txn_array.num_txns)
     {
         return;
     }
-    BaseTxn *base_txn = reinterpret_cast<BaseTxn *>((uint8_t *)txn_array.txns + txn_array.kBaseTxnSize * txn_id);
+    BaseTxn *base_txn = txn_array.getTxn(txn_id);
     switch (static_cast<TpccTxnType>(base_txn->txn_type))
     {
     case TpccTxnType::NEW_ORDER:
@@ -217,14 +218,14 @@ static __device__ __forceinline__ void submitTpccTxn(
 }
 
 static __global__ void submitTpccTxn(
-    TxnArray<TpccTxnParam> txn_array, TpccSubmitLocations submit_loc, TpccConfig config)
+    epic::GpuPackedTxnArray txn_array, TpccSubmitLocations submit_loc, TpccConfig config)
 {
     int txn_id = blockIdx.x * blockDim.x + threadIdx.x;
     if (txn_id >= txn_array.num_txns)
     {
         return;
     }
-    BaseTxn *base_txn = reinterpret_cast<BaseTxn *>((uint8_t *)txn_array.txns + txn_array.kBaseTxnSize * txn_id);
+    BaseTxn *base_txn = txn_array.getTxn(txn_id);
     switch (static_cast<TpccTxnType>(base_txn->txn_type))
     {
     case TpccTxnType::NEW_ORDER:
@@ -247,7 +248,7 @@ static __global__ void submitTpccTxn(
     }
 }
 
-void TpccGpuSubmitter::submit(TxnArray<TpccTxnParam> &txn_array)
+void TpccGpuSubmitter::submit(PackedTxnArray<TpccTxnParam> &txn_array)
 {
     auto &logger = epic::Logger::GetInstance();
 
@@ -262,7 +263,7 @@ void TpccGpuSubmitter::submit(TxnArray<TpccTxnParam> &txn_array)
         .stock_num_ops = stock_submit_dest.d_num_ops};
 
     prepareSubmitTpccTxn<<<(txn_array.num_txns + 1024) / 1024, 1024, 0, std::any_cast<cudaStream_t>(cuda_streams[0])>>>(
-        txn_array, num_ops, config);
+        epic::GpuPackedTxnArray(txn_array), num_ops, config);
 
     gpu_err_check(cudaGetLastError());
     gpu_err_check(cudaStreamSynchronize(std::any_cast<cudaStream_t>(cuda_streams[0])));
@@ -342,7 +343,7 @@ void TpccGpuSubmitter::submit(TxnArray<TpccTxnParam> &txn_array)
     };
 
     submitTpccTxn<<<(txn_array.num_txns + 1024) / 1024, 1024, 0, std::any_cast<cudaStream_t>(cuda_streams[0])>>>(
-        txn_array, locs, config);
+        epic::GpuPackedTxnArray(txn_array), locs, config);
 
     gpu_err_check(cudaGetLastError());
     for (auto &stream : cuda_streams)

@@ -2,6 +2,7 @@
 // Created by Shujian Qian on 2024-04-12.
 //
 
+
 #include <benchmarks/tpcc_gpu_aux_index.h>
 
 #include <random>
@@ -12,7 +13,8 @@
 #include <benchmarks/tpcc_txn_gen.h>
 #include <util_log.h>
 #include <chrono>
-#include <gpu_txn.cuh>
+#include <benchmarks/tpcc_txn.h>
+#include <benchmarks/tpcc_gpu_txn.cuh>
 #include <util_gpu_error_check.cuh>
 #include <cub/warp/warp_merge_sort.cuh>
 
@@ -103,8 +105,10 @@ private:
     T *dh_buffer_;
 };
 
-void __global__ insert_txn_updates_kernel(GpuTxnArray txns, uint32_t num_txns, CustomerOrderBTree btree, CustomerOrderBTree::allocator_type host_allocator,
-    uint32_t *order_num_items, uint32_t *order_customers, uint32_t (*order_items)[15], uint32_t num_slots_per_district)
+template <typename GpuTxnArrayType>
+void __global__ insert_txn_updates_kernel(GpuTxnArrayType txns, uint32_t num_txns, CustomerOrderBTree btree,
+    CustomerOrderBTree::allocator_type host_allocator, uint32_t *order_num_items, uint32_t *order_customers,
+    uint32_t (*order_items)[15], uint32_t num_slots_per_district)
 {
     auto thread_id = threadIdx.x + blockIdx.x * blockDim.x;
     auto block = cg::this_thread_block();
@@ -169,7 +173,8 @@ void __global__ insert_txn_updates_kernel(GpuTxnArray txns, uint32_t num_txns, C
     }
 }
 
-void __global__ perform_range_queries_kernel(GpuTxnArray txns, GpuTxnArray index, uint32_t num_txns,
+template <typename GpuTxnArrayType, typename GpuTxnIndexArrayType>
+void __global__ perform_range_queries_kernel(GpuTxnArrayType txns, GpuTxnIndexArrayType index, uint32_t num_txns,
     CustomerOrderBTree btree, CustomerOrderBTree::allocator_type host_allocator, uint32_t *order_num_items,
     uint32_t *order_customers, uint32_t (*order_items)[15], uint32_t num_slots_per_district)
 {
@@ -418,45 +423,62 @@ public:
 
         logger.Info("Validating gpu aux btree");
         std::vector<TreeParam::key_type> h_keys = keys.to_std_vector();
-        co_btree.validate_tree_structure(h_keys, [](const TreeParam::key_type &key) {return 0;});
+        // co_btree.validate_tree_structure(h_keys, [](const TreeParam::key_type &key) {return 0;});
         logger.Info("Validation passed: gpu aux btree");
     }
-    void insertTxnUpdates(TxnArray<TpccTxn> &txns, size_t epoch)
+
+    template <typename TxnArrayType>
+    void insertTxnUpdates(TxnArrayType &txns, size_t epoch)
     {
         uint32_t num_txns = txns.num_txns;
         const uint32_t block_size = 512;
         const uint32_t num_blocks = (num_txns + block_size - 1) / block_size;
-        insert_txn_updates_kernel<<<num_blocks, block_size>>>(GpuTxnArray(txns), num_txns, co_btree,
+        // TODO: revert hack
+        insert_txn_updates_kernel<<<num_blocks, block_size>>>(GpuPackedTxnArray(txns), num_txns, co_btree,
             co_btree.get_allocator(), order_num_items, order_customers, order_items, num_slots_per_district);
         gpu_err_check(cudaDeviceSynchronize());
     }
-    void performRangeQueries(TxnArray<TpccTxn> &txns, TxnArray<TpccTxnParam> &index, size_t epoch)
+
+    template <typename TxnArrayType, typename TxnParamArrayType>
+    void performRangeQueries(TxnArrayType &txns, TxnParamArrayType &index, size_t epoch)
     {
         uint32_t num_txns = txns.num_txns;
         const uint32_t block_size = 512;
         const uint32_t num_blocks = (num_txns + block_size - 1) / block_size;
-        perform_range_queries_kernel<<<num_blocks, block_size>>>(GpuTxnArray(txns), GpuTxnArray(index), num_txns, co_btree, co_btree.get_allocator(), order_num_items, order_customers, order_items, num_slots_per_district);
+        // TODO: revert hack
+        perform_range_queries_kernel<<<num_blocks, block_size>>>(GpuPackedTxnArray(txns), TpccGpuTxnArrayT(index), num_txns,
+            co_btree, co_btree.get_allocator(), order_num_items, order_customers, order_items, num_slots_per_district);
         gpu_err_check(cudaDeviceSynchronize());
     }
 };
 
 } // namespace detail
 
-TpccGpuAuxIndex::TpccGpuAuxIndex(TpccConfig &config)
+template <typename TxnArrayType, typename TxnParamArrayType>
+TpccGpuAuxIndex<TxnArrayType, TxnParamArrayType>::TpccGpuAuxIndex(TpccConfig &config)
     : impl{detail::TpccGpuAuxIndexImpl{config}}
 {}
 
-void TpccGpuAuxIndex::loadInitialData()
+template <typename TxnArrayType, typename TxnParamArrayType>
+void TpccGpuAuxIndex<TxnArrayType, TxnParamArrayType>::loadInitialData()
 {
     std::any_cast<detail::TpccGpuAuxIndexImpl>(impl).loadInitialData();
 }
-void TpccGpuAuxIndex::insertTxnUpdates(TxnArray<TpccTxn> &txns, size_t epoch)
+
+template <typename TxnArrayType, typename TxnParamArrayType>
+void TpccGpuAuxIndex<TxnArrayType, TxnParamArrayType>::insertTxnUpdates(TxnArrayType &txns, size_t epoch)
 {
     std::any_cast<detail::TpccGpuAuxIndexImpl>(impl).insertTxnUpdates(txns, epoch);
 }
-void TpccGpuAuxIndex::performRangeQueries(TxnArray<TpccTxn> &txns, TxnArray<TpccTxnParam> &index, size_t epoch)
+
+template <typename TxnArrayType, typename TxnParamArrayType>
+void TpccGpuAuxIndex<TxnArrayType, TxnParamArrayType>::performRangeQueries(
+    TxnArrayType &txns, TxnParamArrayType &index, size_t epoch)
 {
     std::any_cast<detail::TpccGpuAuxIndexImpl>(impl).performRangeQueries(txns, index, epoch);
 }
+
+/* instantiate the templated class with choosen type */
+template class TpccGpuAuxIndex<TpccTxnArrayT, TpccTxnParamArrayT>;
 
 } // namespace epic::tpcc

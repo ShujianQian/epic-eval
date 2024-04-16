@@ -12,7 +12,7 @@ namespace gacco::tpcc {
 class GpuExecutor : public Executor
 {
 public:
-    GpuExecutor(TpccRecords records, Executor::TpccTableLocks table_locks, TxnArray<TpccTxnParam> txn, epic::tpcc::TpccConfig config)
+    GpuExecutor(TpccRecords records, Executor::TpccTableLocks table_locks, PackedTxnArray<TpccTxnParam> txn, epic::tpcc::TpccConfig config)
         : Executor(records, table_locks, txn, config){};
         ~GpuExecutor() override = default;
     void execute(uint32_t epoch) override;

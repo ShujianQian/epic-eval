@@ -46,19 +46,20 @@ TpccDb::TpccDb(TpccConfig config)
     , execution_plan_input(config.num_txns, config.execution_device, false)
     , cpu_aux_index(config)
     , gpu_aux_index(config)
+    , packed_txn_array_builder(config.num_txns)
 {
     //    index = std::make_shared<TpccCpuIndex>(config);
     for (int i = 0; i < config.epochs; ++i)
     {
-        txn_array[i] = TxnArray<TpccTxn>(config.num_txns, DeviceType::CPU);
+        txn_array[i] = TpccTxnArrayT(config.num_txns, DeviceType::CPU);
     }
     if (config.index_device == DeviceType::CPU)
     {
-        index = std::make_shared<TpccCpuIndex>(config);
+        index = std::make_shared<TpccCpuIndex<TpccTxnArrayT, TpccTxnParamArrayT>>(config);
     }
     else if (config.index_device == DeviceType::GPU)
     {
-        index = std::make_shared<TpccGpuIndex>(config);
+        index = std::make_shared<TpccGpuIndex<TpccTxnArrayT, TpccTxnParamArrayT>>(config);
     }
     else
     {
@@ -73,23 +74,23 @@ TpccDb::TpccDb(TpccConfig config)
     if (config.initialize_device == DeviceType::GPU)
     {
         GpuAllocator allocator;
-        warehouse_planner = std::make_unique<GpuTableExecutionPlanner>(
+        warehouse_planner = std::make_unique<GpuTableExecutionPlanner<TpccTxnExecPlanArrayT>>(
             "warehouse", allocator, 0, 2, config.num_txns, config.num_warehouses, initialization_output);
-        district_planner = std::make_unique<GpuTableExecutionPlanner>(
+        district_planner = std::make_unique<GpuTableExecutionPlanner<TpccTxnExecPlanArrayT>>(
             "district", allocator, 0, 2, config.num_txns, config.num_warehouses * 10, initialization_output);
-        customer_planner = std::make_unique<GpuTableExecutionPlanner>(
+        customer_planner = std::make_unique<GpuTableExecutionPlanner<TpccTxnExecPlanArrayT>>(
             "customer", allocator, 0, 20, config.num_txns, config.num_warehouses * 10 * 3000, initialization_output);
-        history_planner = std::make_unique<GpuTableExecutionPlanner>(
+        history_planner = std::make_unique<GpuTableExecutionPlanner<TpccTxnExecPlanArrayT>>(
             "history", allocator, 0, 1, config.num_txns, config.num_warehouses * 10 * 3000, initialization_output);
-        new_order_planner = std::make_unique<GpuTableExecutionPlanner>(
+        new_order_planner = std::make_unique<GpuTableExecutionPlanner<TpccTxnExecPlanArrayT>>(
             "new_order", allocator, 0, 10, config.num_txns, config.num_warehouses * 10 * 900, initialization_output);
-        order_planner = std::make_unique<GpuTableExecutionPlanner>(
+        order_planner = std::make_unique<GpuTableExecutionPlanner<TpccTxnExecPlanArrayT>>(
             "order", allocator, 0, 20, config.num_txns, config.num_warehouses * 10 * 3000, initialization_output);
-        order_line_planner = std::make_unique<GpuTableExecutionPlanner>("order_line", allocator, 0, 30, config.num_txns,
-            config.num_warehouses * 10 * 3000 * 15, initialization_output);
-        item_planner = std::make_unique<GpuTableExecutionPlanner>(
+        order_line_planner = std::make_unique<GpuTableExecutionPlanner<TpccTxnExecPlanArrayT>>("order_line", allocator,
+            0, 30, config.num_txns, config.num_warehouses * 10 * 3000 * 15, initialization_output);
+        item_planner = std::make_unique<GpuTableExecutionPlanner<TpccTxnExecPlanArrayT>>(
             "item", allocator, 0, 15, config.num_txns, 100'000, initialization_output);
-        stock_planner = std::make_unique<GpuTableExecutionPlanner>(
+        stock_planner = std::make_unique<GpuTableExecutionPlanner<TpccTxnExecPlanArrayT>>(
             "stock", allocator, 0, 15 * 2, config.num_txns, 100'000 * config.num_warehouses, initialization_output);
 
         warehouse_planner->Initialize();
@@ -103,32 +104,33 @@ TpccDb::TpccDb(TpccConfig config)
         stock_planner->Initialize();
         allocator.PrintMemoryInfo();
 
-        submitter = std::make_shared<TpccGpuSubmitter>(
-            TpccSubmitter::TableSubmitDest{warehouse_planner->d_num_ops, warehouse_planner->d_op_offsets,
+        using SubmitDestT = TpccGpuSubmitter<TpccTxnParamArrayT>::TableSubmitDest;
+        submitter = std::make_shared<TpccGpuSubmitter<TpccTxnParamArrayT>>(
+            SubmitDestT{warehouse_planner->d_num_ops, warehouse_planner->d_op_offsets,
                 warehouse_planner->d_submitted_ops, warehouse_planner->d_scratch_array,
                 warehouse_planner->scratch_array_bytes, warehouse_planner->curr_num_ops},
-            TpccSubmitter::TableSubmitDest{district_planner->d_num_ops, district_planner->d_op_offsets,
+            SubmitDestT{district_planner->d_num_ops, district_planner->d_op_offsets,
                 district_planner->d_submitted_ops, district_planner->d_scratch_array,
                 district_planner->scratch_array_bytes, district_planner->curr_num_ops},
-            TpccSubmitter::TableSubmitDest{customer_planner->d_num_ops, customer_planner->d_op_offsets,
+            SubmitDestT{customer_planner->d_num_ops, customer_planner->d_op_offsets,
                 customer_planner->d_submitted_ops, customer_planner->d_scratch_array,
                 customer_planner->scratch_array_bytes, customer_planner->curr_num_ops},
-            TpccSubmitter::TableSubmitDest{history_planner->d_num_ops, history_planner->d_op_offsets,
+            SubmitDestT{history_planner->d_num_ops, history_planner->d_op_offsets,
                 history_planner->d_submitted_ops, history_planner->d_scratch_array,
                 history_planner->scratch_array_bytes, history_planner->curr_num_ops},
-            TpccSubmitter::TableSubmitDest{new_order_planner->d_num_ops, new_order_planner->d_op_offsets,
+            SubmitDestT{new_order_planner->d_num_ops, new_order_planner->d_op_offsets,
                 new_order_planner->d_submitted_ops, new_order_planner->d_scratch_array,
                 new_order_planner->scratch_array_bytes, new_order_planner->curr_num_ops},
-            TpccSubmitter::TableSubmitDest{order_planner->d_num_ops, order_planner->d_op_offsets,
+            SubmitDestT{order_planner->d_num_ops, order_planner->d_op_offsets,
                 order_planner->d_submitted_ops, order_planner->d_scratch_array, order_planner->scratch_array_bytes,
                 order_planner->curr_num_ops},
-            TpccSubmitter::TableSubmitDest{order_line_planner->d_num_ops, order_line_planner->d_op_offsets,
+            SubmitDestT{order_line_planner->d_num_ops, order_line_planner->d_op_offsets,
                 order_line_planner->d_submitted_ops, order_line_planner->d_scratch_array,
                 order_line_planner->scratch_array_bytes, order_line_planner->curr_num_ops},
-            TpccSubmitter::TableSubmitDest{item_planner->d_num_ops, item_planner->d_op_offsets,
+            SubmitDestT{item_planner->d_num_ops, item_planner->d_op_offsets,
                 item_planner->d_submitted_ops, item_planner->d_scratch_array, item_planner->scratch_array_bytes,
                 item_planner->curr_num_ops},
-            TpccSubmitter::TableSubmitDest{stock_planner->d_num_ops, stock_planner->d_op_offsets,
+            SubmitDestT{stock_planner->d_num_ops, stock_planner->d_op_offsets,
                 stock_planner->d_submitted_ops, stock_planner->d_scratch_array, stock_planner->scratch_array_bytes,
                 stock_planner->curr_num_ops});
     }
@@ -214,8 +216,8 @@ TpccDb::TpccDb(TpccConfig config)
         /* TODO: execution input need to be transferred too, currently using placeholders */
 //        executor =
 //            std::make_shared<GpuExecutor>(records, versions, initialization_input, initialization_output, config);
-        executor =
-            std::make_shared<GpuExecutor>(records, versions, execution_param_input, execution_plan_input, config);
+        executor = std::make_shared<GpuExecutor<TpccTxnParamArrayT, TpccTxnExecPlanArrayT>>(
+            records, versions, execution_param_input, execution_plan_input, config);
     }
     else if (config.execution_device == DeviceType::CPU)
     {
@@ -283,8 +285,8 @@ TpccDb::TpccDb(TpccConfig config)
         logger.Info("Stock record: {}, version: {}", formatSizeBytes(stock_rec_size), formatSizeBytes(stock_ver_size));
         records.stock_record = static_cast<Record<StockValue> *>(Malloc(stock_rec_size));
         versions.stock_version = static_cast<Version<StockValue> *>(Malloc(stock_ver_size));
-        executor =
-            std::make_shared<CpuExecutor>(records, versions, execution_param_input, execution_plan_input, config);
+        executor = std::make_shared<CpuExecutor<TpccTxnParamArrayT, TpccTxnExecPlanArrayT>>(
+            records, versions, execution_param_input, execution_plan_input, config);
     }
     else
     {
@@ -302,11 +304,26 @@ void TpccDb::generateTxns()
     for (size_t epoch = 0; epoch < config.epochs; ++epoch)
     {
         logger.Info("Generating epoch {}", epoch);
+        TpccTxnArrayT &txn_input_array = txn_array[epoch];
+        uint32_t curr_size = 0;
         for (size_t i = 0; i < config.num_txns; ++i)
         {
+#if 0
             BaseTxn *txn = txn_array[epoch].getTxn(i);
             uint32_t timestamp = epoch * config.num_txns + i;
             generator.generateTxn(txn, timestamp);
+#else
+            TpccTxnType txn_type = generator.getTxnType();
+            constexpr uint32_t txn_sizes[6] = {0, BaseTxnSize<NewOrderTxnInput<FixedSizeTxn>>::value,
+                BaseTxnSize<PaymentTxnInput>::value, BaseTxnSize<OrderStatusTxnInput>::value,
+                BaseTxnSize<DeliveryTxnInput>::value, BaseTxnSize<StockLevelTxnInput>::value};
+            txn_input_array.index[i] = curr_size;
+            curr_size += txn_sizes[static_cast<uint32_t>(txn_type)];
+            txn_input_array.size = curr_size;
+            BaseTxn *txn = txn_input_array.getTxn(i);
+            uint32_t timestamp = epoch * config.num_txns + i;
+            generator.generateTxn(txn_type, txn, timestamp);
+#endif
         }
     }
 }
@@ -347,6 +364,9 @@ void TpccDb::runBenchmark()
             input_index_bridge.Link(txn_array[index_epoch_id], index_input);
             input_index_bridge.StartTransfer();
             input_index_bridge.FinishTransfer();
+
+            packed_txn_array_builder.buildPackedTxnArrayGpu(index_input, index_output);
+            packed_txn_array_builder.buildPackedTxnArrayGpu(index_input, initialization_output);
 
 #if 0 // DEBUG
             {
@@ -406,7 +426,6 @@ void TpccDb::runBenchmark()
             start_time = std::chrono::high_resolution_clock::now();
             index_initialization_bridge.StartTransfer();
             index_initialization_bridge.FinishTransfer();
-            index_execution_param_bridge.StartTransfer();
             end_time = std::chrono::high_resolution_clock::now();
             logger.Info("Epoch {} init_transfer time: {} us", epoch_id,
                 std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count());
@@ -547,6 +566,7 @@ void TpccDb::runBenchmark()
         /* transfer */
         {
             start_time = std::chrono::high_resolution_clock::now();
+            index_execution_param_bridge.StartTransfer();
             initialization_execution_plan_bridge.StartTransfer();
             index_execution_param_bridge.FinishTransfer();
             initialization_execution_plan_bridge.FinishTransfer();

@@ -13,6 +13,7 @@
 
 namespace epic::tpcc {
 
+template <typename TxnArrayType, typename TxnParamArrayType>
 class TpccGpuAuxIndex
 {
     std::any impl;
@@ -20,8 +21,8 @@ class TpccGpuAuxIndex
 public:
     explicit TpccGpuAuxIndex(TpccConfig &config);
     void loadInitialData();
-    void insertTxnUpdates(TxnArray<TpccTxn> &txns, size_t epoch);
-    void performRangeQueries(TxnArray<TpccTxn> &txns, TxnArray<TpccTxnParam> &index, size_t epoch);
+    void insertTxnUpdates(TxnArrayType &txns, size_t epoch);
+    void performRangeQueries(TxnArrayType &txns, TxnParamArrayType &index, size_t epoch);
 };
 
 } // namespace epic::tpcc

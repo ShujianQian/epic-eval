@@ -4,6 +4,8 @@
 
 #include "gpu_execution_planner.h"
 
+#include <type_traits>
+
 #include <cub/cub.cuh>
 
 #include "util_math.h"
@@ -11,6 +13,12 @@
 #include "util_arch.h"
 #include "util_gpu_error_check.cuh"
 #include "util_cub_reverse_iterator.cuh"
+
+// TODO: this is really bad, fix when I have time
+#include <benchmarks/tpcc_gpu_txn.cuh>
+#include <benchmarks/tpcc_txn.h>
+#include <benchmarks/ycsb_txn.h>
+#include <benchmarks/ycsb_gpu_txn.cuh>
 
 namespace epic {
 
@@ -29,7 +37,8 @@ size_t allocateDeviceArray(
 
 } // namespace
 
-void GpuTableExecutionPlanner::Initialize()
+template <typename TxnExecPlanArrayType>
+void GpuTableExecutionPlanner<TxnExecPlanArrayType>::Initialize()
 {
     epic::Logger &logger = epic::Logger::GetInstance();
     size_t total_allocated_size = 0;
@@ -69,7 +78,10 @@ void GpuTableExecutionPlanner::Initialize()
     cuda_stream = stream;
 }
 
-void GpuTableExecutionPlanner::SubmitOps(CalcNumOpsFunc pre_submit_ops_func, SubmitOpsFunc submit_ops_func) {}
+template <typename TxnExecPlanArrayType>
+void GpuTableExecutionPlanner<TxnExecPlanArrayType>::SubmitOps(
+    CalcNumOpsFunc pre_submit_ops_func, SubmitOpsFunc submit_ops_func)
+{}
 
 namespace {
 struct SameRow
@@ -135,8 +147,10 @@ __global__ void calcOperationType(
 
     output[idx] = retval;
 }
+
+template <typename GpuTxnExecPlanArrayType>
 __global__ void scatterRWLocation(op_t *sorted_ops, OperationT *op_types, uint32_t *ver_writes_before,
-    void *initialize_output, uint32_t base_txn_size, uint32_t num_ops)
+    GpuTxnExecPlanArrayType exec_plan, uint32_t num_ops)
 {
     uint32_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= num_ops)
@@ -165,13 +179,13 @@ __global__ void scatterRWLocation(op_t *sorted_ops, OperationT *op_types, uint32
     }
     uint32_t txn_id = GET_TXN_ID(sorted_ops[idx]);
     uint32_t offset = GET_OFFSET(sorted_ops[idx]);
-    uint32_t *txn_base_ptr = reinterpret_cast<uint32_t *>(
-        reinterpret_cast<BaseTxn *>(static_cast<uint8_t *>(initialize_output) + txn_id * base_txn_size)->data);
+    uint32_t *txn_base_ptr = reinterpret_cast<uint32_t *>(exec_plan.getTxn(txn_id)->data);
     txn_base_ptr[offset] = rw_location;
 }
 } // namespace
 
-void GpuTableExecutionPlanner::InitializeExecutionPlan()
+template <typename TxnExecPlanArrayType>
+void GpuTableExecutionPlanner<TxnExecPlanArrayType>::InitializeExecutionPlan()
 {
     epic::Logger &logger = epic::Logger::GetInstance();
     logger.Info("Initializing execution plan for GPU table {}", name);
@@ -263,14 +277,23 @@ void GpuTableExecutionPlanner::InitializeExecutionPlan()
     gpu_err_check(cub::DeviceScan::ExclusiveSum(d_scratch_array, scratch_array_bytes, version_write_val,
         static_cast<uint32_t *>(d_tver_write_ops_before), curr_num_ops, std::any_cast<cudaStream_t>(cuda_stream)));
 
+    // TODO: fix this disgusting stuff by moving everything into a .cuh file
+    using GpuTxnArrayType =
+        typename std::conditional_t<std::is_same_v<TxnExecPlanArrayType, tpcc::TpccTxnExecPlanArrayT>,
+            tpcc::TpccGpuTxnArrayT, ycsb::YcsbGpuTxnArrayT>;
     scatterRWLocation<<<(curr_num_ops + 255) / 256, 256, 0, std::any_cast<cudaStream_t>(cuda_stream)>>>(
         static_cast<op_t *>(d_sorted_ops), static_cast<OperationT *>(d_rw_ops_type),
-        static_cast<uint32_t *>(d_tver_write_ops_before), d_output_txn_array, output_txn_array_baseTxn_size,
+        static_cast<uint32_t *>(d_tver_write_ops_before), GpuTxnArrayType(exec_plan),
         curr_num_ops);
+    // TODO: again, disgusting hack
+    static_assert(
+        std::is_same_v<TxnExecPlanArrayType, tpcc::TpccTxnExecPlanArrayT> || std::is_same_v < TxnExecPlanArrayType,
+        TxnArray<ycsb::YcsbExecPlan>>);
     gpu_err_check(cudaGetLastError());
 }
 
-void GpuTableExecutionPlanner::FinishInitialization()
+template <typename TxnExecPlanArrayType>
+void GpuTableExecutionPlanner<TxnExecPlanArrayType>::FinishInitialization()
 {
     if (curr_num_ops == 0)
     {
@@ -329,5 +352,10 @@ void GpuTableExecutionPlanner::FinishInitialization()
 #endif
 }
 
-void GpuTableExecutionPlanner::ScatterOpLocations() {}
+template <typename TxnExecPlanArrayType>
+void GpuTableExecutionPlanner<TxnExecPlanArrayType>::ScatterOpLocations() {}
+
+template class GpuTableExecutionPlanner<tpcc::TpccTxnExecPlanArrayT>;
+template class GpuTableExecutionPlanner<TxnArray<ycsb::YcsbExecPlan>>;
+
 } // namespace epic

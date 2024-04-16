@@ -10,7 +10,8 @@
 
 namespace epic::tpcc {
 
-void CpuExecutor::execute(uint32_t epoch)
+template<typename TxnParamArrayType, typename TxnExecPlanArrayType>
+void CpuExecutor<TxnParamArrayType, TxnExecPlanArrayType>::execute(uint32_t epoch)
 {
     uint32_t num_threads = config.cpu_exec_num_threads;
     std::vector<std::thread> threads;
@@ -25,7 +26,8 @@ void CpuExecutor::execute(uint32_t epoch)
     }
 }
 
-inline void CpuExecutor::executeTxn(
+template<typename TxnParamArrayType, typename TxnExecPlanArrayType>
+inline void CpuExecutor<TxnParamArrayType, TxnExecPlanArrayType>::executeTxn(
     NewOrderTxnParams<FixedSizeTxn> *txn, NewOrderExecPlan<FixedSizeTxn> *plan, uint32_t epoch)
 {
     double mult = 1;
@@ -36,7 +38,8 @@ inline void CpuExecutor::executeTxn(
     DistrictValue d;
     readFromTable(records.district_record, versions.district_version, txn->district_id, plan->district_loc, epoch, &d);
     d.d_next_o_id = txn->next_order_id;
-    writeToTable(records.district_record, versions.district_version, txn->district_id, plan->district_write_loc, epoch, &d);
+    writeToTable(
+        records.district_record, versions.district_version, txn->district_id, plan->district_write_loc, epoch, &d);
     mult += d.d_tax / 100.0;
     CustomerValue c;
     readFromTable(records.customer_record, versions.customer_version, txn->customer_id, plan->customer_loc, epoch, &c);
@@ -73,25 +76,34 @@ inline void CpuExecutor::executeTxn(
     txn->num_items = total; /* so that the compiler won't optimize the code above away */
 }
 
-inline void CpuExecutor::executeTxn(PaymentTxnParams *txn, PaymentTxnExecPlan *plan, uint32_t epoch) {
+template<typename TxnParamArrayType, typename TxnExecPlanArrayType>
+inline void CpuExecutor<TxnParamArrayType, TxnExecPlanArrayType>::executeTxn(
+    PaymentTxnParams *txn, PaymentTxnExecPlan *plan, uint32_t epoch)
+{
     WarehouseValue w;
     readFromTable(
         records.warehouse_record, versions.warehouse_version, txn->warehouse_id, plan->warehouse_read_loc, epoch, &w);
     w.w_ytd += txn->payment_amount;
-    writeToTable(records.warehouse_record, versions.warehouse_version, txn->warehouse_id, plan->warehouse_write_loc, epoch, &w);
+    writeToTable(
+        records.warehouse_record, versions.warehouse_version, txn->warehouse_id, plan->warehouse_write_loc, epoch, &w);
     DistrictValue d;
-    readFromTable(records.district_record, versions.district_version, txn->district_id, plan->district_read_loc, epoch, &d);
+    readFromTable(
+        records.district_record, versions.district_version, txn->district_id, plan->district_read_loc, epoch, &d);
     d.d_ytd += txn->payment_amount;
-    writeToTable(records.district_record, versions.district_version, txn->district_id, plan->district_write_loc, epoch, &d);
+    writeToTable(
+        records.district_record, versions.district_version, txn->district_id, plan->district_write_loc, epoch, &d);
     CustomerValue c;
-    readFromTable(records.customer_record, versions.customer_version, txn->customer_id, plan->customer_read_loc, epoch, &c);
+    readFromTable(
+        records.customer_record, versions.customer_version, txn->customer_id, plan->customer_read_loc, epoch, &c);
     c.c_balance -= txn->payment_amount;
     c.c_ytd_payment += txn->payment_amount;
     c.c_payment_cnt++;
-    writeToTable(records.customer_record, versions.customer_version, txn->customer_id, plan->customer_write_loc, epoch, &c);
+    writeToTable(
+        records.customer_record, versions.customer_version, txn->customer_id, plan->customer_write_loc, epoch, &c);
 }
 
-void CpuExecutor::executionWorker(uint32_t epoch, uint32_t tid)
+template<typename TxnParamArrayType, typename TxnExecPlanArrayType>
+void CpuExecutor<TxnParamArrayType, TxnExecPlanArrayType>::executionWorker(uint32_t epoch, uint32_t tid)
 {
     uint32_t num_threads = config.cpu_exec_num_threads;
     for (uint32_t txn_id = tid; txn_id < config.num_txns;
@@ -128,7 +140,9 @@ void CpuExecutor::executionWorker(uint32_t epoch, uint32_t tid)
     }
 }
 
-void CpuExecutor::executeTxn(OrderStatusTxnParams *txn, OrderStatusTxnExecPlan *plan, uint32_t epoch)
+template<typename TxnParamArrayType, typename TxnExecPlanArrayType>
+void CpuExecutor<TxnParamArrayType, TxnExecPlanArrayType>::executeTxn(
+    OrderStatusTxnParams *txn, OrderStatusTxnExecPlan *plan, uint32_t epoch)
 {
     CustomerValue cv;
     readFromTable(records.customer_record, versions.customer_version, txn->customer_id, plan->customer_loc, epoch, &cv);
@@ -142,7 +156,9 @@ void CpuExecutor::executeTxn(OrderStatusTxnParams *txn, OrderStatusTxnExecPlan *
     }
 }
 
-void CpuExecutor::executeTxn(DeliveryTxnParams *txn, DeliveryTxnExecPlan *plan, uint32_t epoch)
+template<typename TxnParamArrayType, typename TxnExecPlanArrayType>
+void CpuExecutor<TxnParamArrayType, TxnExecPlanArrayType>::executeTxn(
+    DeliveryTxnParams *txn, DeliveryTxnExecPlan *plan, uint32_t epoch)
 {
 
     for (int i = 0; i < 10; ++i)
@@ -180,7 +196,9 @@ void CpuExecutor::executeTxn(DeliveryTxnParams *txn, DeliveryTxnExecPlan *plan, 
     }
 }
 
-void CpuExecutor::executeTxn(StockLevelTxnParams *txn, StockLevelTxnExecPlan *plan, uint32_t epoch)
+template<typename TxnParamArrayType, typename TxnExecPlanArrayType>
+void CpuExecutor<TxnParamArrayType, TxnExecPlanArrayType>::executeTxn(
+    StockLevelTxnParams *txn, StockLevelTxnExecPlan *plan, uint32_t epoch)
 {
     uint32_t num_low_stock = 0;
     const uint32_t threshold = txn->threshold;
@@ -196,5 +214,7 @@ void CpuExecutor::executeTxn(StockLevelTxnParams *txn, StockLevelTxnExecPlan *pl
     }
     txn->num_low_stock = num_low_stock;
 }
+
+template class CpuExecutor<TpccTxnParamArrayT, TpccTxnExecPlanArrayT>;
 
 } // namespace epic::tpcc

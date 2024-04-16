@@ -2,6 +2,8 @@
 // Created by Shujian Qian on 2023-10-25.
 //
 
+#include "tpcc_gpu_txn.cuh"
+
 #include <benchmarks/tpcc_gpu_executor.h>
 
 #include <stdio.h>
@@ -291,8 +293,9 @@ union CachableTxnExecPlan
 
 static_assert(sizeof(CachableTxnExecPlan) + sizeof(CachableTxnParams) < 1000);
 
-__global__ void gpuExecKernel(
-    TpccRecords records, TpccVersions versions, GpuTxnArray txn, GpuTxnArray plan, uint32_t num_txns, uint32_t epoch)
+template <typename GpuTxnArrayType>
+__global__ void gpuExecKernel(TpccRecords records, TpccVersions versions, GpuTxnArrayType txn, GpuTxnArrayType plan,
+    uint32_t num_txns, uint32_t epoch)
 {
     constexpr uint32_t leader_lane = 0;
     constexpr uint32_t all_lanes_mask = 0xffffffffu;
@@ -383,7 +386,8 @@ __global__ void gpuExecKernel(
 
 } // namespace
 
-void GpuExecutor::execute(uint32_t epoch)
+template <typename TxnParamArrayType, typename TxnExecPlanArrayType>
+void GpuExecutor<TxnParamArrayType, TxnExecPlanArrayType>::execute(uint32_t epoch)
 {
     /* clear the txn_counter */
     gpu_err_check(cudaMemcpyToSymbol(txn_counter, &zero, sizeof(uint32_t)));
@@ -424,9 +428,11 @@ void GpuExecutor::execute(uint32_t epoch)
 
     uint32_t num_blocks = (config.num_txns * kDeviceWarpSize + block_size - 1) / block_size;
     gpuExecKernel<<<num_blocks, block_size>>>(
-        records, versions, GpuTxnArray(txn), GpuTxnArray(plan), config.num_txns, epoch);
+        records, versions, TpccGpuTxnArrayT(txn), TpccGpuTxnArrayT(plan), config.num_txns, epoch);
     gpu_err_check(cudaPeekAtLastError());
     gpu_err_check(cudaDeviceSynchronize());
 }
+
+template class GpuExecutor<TpccTxnParamArrayT, TpccTxnExecPlanArrayT>;
 
 } // namespace epic::tpcc

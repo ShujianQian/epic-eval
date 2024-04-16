@@ -35,20 +35,20 @@ private:
     Table warehouse_table;
 
     TpccConfig config;
-    std::vector<TxnArray<TpccTxn>> txn_array;
-    TxnArray<TpccTxn> index_input;
-    TxnArray<TpccTxnParam> index_output;
-    TxnArray<TpccTxnParam> initialization_input;
-    TxnArray<TpccExecPlan> initialization_output;
-    TxnArray<TpccTxnParam> execution_param_input;
-    TxnArray<TpccExecPlan> execution_plan_input;
+    std::vector<TpccTxnArrayT> txn_array;
+    TpccTxnArrayT index_input;
+    TpccTxnParamArrayT index_output;
+    TpccTxnParamArrayT initialization_input;
+    TpccTxnExecPlanArrayT initialization_output;
+    TpccTxnParamArrayT execution_param_input;
+    TpccTxnExecPlanArrayT execution_plan_input;
 
-    TxnBridge input_index_bridge;
-    TxnBridge index_initialization_bridge;
-    TxnBridge index_execution_param_bridge;
-    TxnBridge initialization_execution_plan_bridge;
+    PackedTxnBridge input_index_bridge;
+    PackedTxnBridge index_initialization_bridge;
+    PackedTxnBridge index_execution_param_bridge;
+    PackedTxnBridge initialization_execution_plan_bridge;
 
-    std::shared_ptr<TpccIndex> index;
+    std::shared_ptr<TpccIndex<TpccTxnArrayT, TpccTxnParamArrayT>> index;
 
     std::shared_ptr<TableExecutionPlanner> warehouse_planner;
     std::shared_ptr<TableExecutionPlanner> district_planner;
@@ -59,15 +59,16 @@ private:
     std::shared_ptr<TableExecutionPlanner> order_line_planner;
     std::shared_ptr<TableExecutionPlanner> item_planner;
     std::shared_ptr<TableExecutionPlanner> stock_planner;
-    std::shared_ptr<TpccSubmitter> submitter;
+    std::shared_ptr<TpccSubmitter<TpccTxnParamArrayT>> submitter;
 
     TpccRecords records;
     TpccVersions versions;
 
-    std::shared_ptr<Executor> executor;
+    std::shared_ptr<Executor<TpccTxnParamArrayT, TpccTxnExecPlanArrayT>> executor;
 
     TpccCpuAuxIndex cpu_aux_index;
-    TpccGpuAuxIndex gpu_aux_index;
+    TpccGpuAuxIndex<TpccTxnArrayT, TpccTxnParamArrayT> gpu_aux_index;
+    TpccPackedTxnArrayBuilder packed_txn_array_builder;
 
 public:
     explicit TpccDb(TpccConfig config);

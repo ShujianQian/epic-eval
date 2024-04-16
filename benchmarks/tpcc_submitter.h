@@ -12,6 +12,8 @@
 #include "tpcc_txn.h"
 
 namespace epic::tpcc {
+
+template <typename TxnParamArrayType>
 class TpccSubmitter
 {
 public:
@@ -51,7 +53,7 @@ public:
         , stock_submit_dest(stock_submit_dest)
     {}
 
-    virtual void submit(TxnArray<TpccTxnParam> &txn_array)
+    virtual void submit(TxnParamArrayType &txn_array)
     {
         auto &logger = Logger::GetInstance();
         logger.Error("TpccSubmittor::submit not implemented");

@@ -112,6 +112,7 @@ struct TpccTxnGenerator
     void generateTxn(DeliveryTxnInput *txn, uint32_t timestamp);
     void generateTxn(StockLevelTxnInput *txn, uint32_t timestamp);
     void generateTxn(BaseTxn *txn, uint32_t timestamp);
+    void generateTxn(TpccTxnType txn_type, BaseTxn *txn, uint32_t timestamp);
 };
 
 }

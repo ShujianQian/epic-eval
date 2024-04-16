@@ -153,4 +153,29 @@ void TpccTxnGenerator::generateTxn(BaseTxn *txn, uint32_t timestamp)
     }
 }
 
+void TpccTxnGenerator::generateTxn(TpccTxnType txn_type, BaseTxn *txn, uint32_t timestamp)
+{
+    txn->txn_type = static_cast<uint32_t>(txn_type);
+    switch (txn_type)
+    {
+    case TpccTxnType::NEW_ORDER:
+        generateTxn(reinterpret_cast<NewOrderTxnInput<FixedSizeTxn> *>(txn->data), timestamp);
+        break;
+    case TpccTxnType::PAYMENT:
+        generateTxn(reinterpret_cast<PaymentTxnInput *>(txn->data), timestamp);
+        break;
+    case TpccTxnType::ORDER_STATUS:
+        generateTxn(reinterpret_cast<OrderStatusTxnInput *>(txn->data), timestamp);
+        break;
+    case TpccTxnType::DELIVERY:
+        generateTxn(reinterpret_cast<DeliveryTxnInput *>(txn->data), timestamp);
+        break;
+    case TpccTxnType::STOCK_LEVEL:
+        generateTxn(reinterpret_cast<StockLevelTxnInput *>(txn->data), timestamp);
+        break;
+    default:
+        break;
+    }
+}
+
 }

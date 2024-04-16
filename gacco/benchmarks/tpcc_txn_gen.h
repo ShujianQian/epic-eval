@@ -15,6 +15,7 @@ struct TpccTxnGenerator : public epic::tpcc::TpccTxnGenerator
     explicit TpccTxnGenerator (epic::tpcc::TpccConfig config) : epic::tpcc::TpccTxnGenerator(config) {}
     TpccTxnType getTxnType(uint32_t txn_id);
     void generateTxn(epic::BaseTxn *base_txn, uint32_t txn_id, uint32_t timestamp);
+    void generateTxn(TpccTxnType txn_type, epic::BaseTxn *base_txn, uint32_t timestamp);
 };
 
 }

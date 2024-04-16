@@ -39,7 +39,7 @@ YcsbBenchmark::YcsbBenchmark(YcsbConfig config)
     initialization_execution_plan_bridge.Link(initialization_output, execution_plan_input);
 
     GpuAllocator allocator;
-    planner = std::make_shared<GpuTableExecutionPlanner>(
+    planner = std::make_shared<GpuTableExecutionPlanner<TxnArray<YcsbExecPlan>>>(
         "planner", allocator, 0, 11 * 10, config.num_txns, config.num_records, initialization_output);
     planner->Initialize();
 

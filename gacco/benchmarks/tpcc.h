@@ -18,33 +18,36 @@
 #include <gacco/benchmarks/tpcc_submitter.h>
 #include <gacco/benchmarks/tpcc_executor.h>
 
-using epic::TxnBridge;
 
 namespace gacco::tpcc {
 
 using epic::tpcc::TpccConfig;
 using epic::TxnArray;
+using epic::PackedTxnArray;
 using epic::TxnInputArray;
 using epic::tpcc::TpccTxn;
 using epic::tpcc::TpccTxnParam;
 using epic::tpcc::TpccTxnParam;
 using epic::tpcc::TpccIndex;
 using epic::tpcc::TpccCpuIndex;
+using epic::TxnBridge;
+using epic::PackedTxnBridge;
+using epic::tpcc::TpccPackedTxnArrayBuilder;
 
 class TpccDb : public epic::Benchmark
 {
 public:
     TpccConfig config;
 
-    std::vector<TxnArray<TpccTxn>> txn_array;
-    TxnArray<TpccTxn> index_input;
-    TxnArray<TpccTxnParam> index_output;
-    TxnArray<TpccTxnParam> initialization_input;
+    std::vector<PackedTxnArray<TpccTxn>> txn_array;
+    PackedTxnArray<TpccTxn> index_input;
+    PackedTxnArray<TpccTxnParam> index_output;
+    PackedTxnArray<TpccTxnParam> initialization_input;
 
-    TxnBridge input_index_bridge;
-    TxnBridge index_initialization_bridge;
+    PackedTxnBridge input_index_bridge;
+    PackedTxnBridge index_initialization_bridge;
 
-    std::shared_ptr<TpccIndex> index;
+    std::shared_ptr<TpccIndex<epic::tpcc::TpccTxnArrayT, epic::tpcc::TpccTxnParamArrayT>> index;
 
     std::shared_ptr<TableExecutionPlanner> warehouse_planner;
     std::shared_ptr<TableExecutionPlanner> district_planner;
@@ -58,6 +61,8 @@ public:
     std::shared_ptr<TpccSubmitter> submitter;
 
     std::shared_ptr<Executor> executor;
+
+    TpccPackedTxnArrayBuilder builder;
 
     explicit TpccDb(TpccConfig config);
     void loadInitialData() override;

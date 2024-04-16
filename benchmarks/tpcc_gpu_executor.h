@@ -9,12 +9,19 @@
 
 namespace epic::tpcc {
 
-class GpuExecutor : public Executor
+template <typename TxnParamArrayType, typename TxnExecPlanArrayType>
+class GpuExecutor : public Executor<TxnParamArrayType, TxnExecPlanArrayType>
 {
 public:
-    GpuExecutor(TpccRecords records, TpccVersions versions, TxnArray<TpccTxnParam> txn, TxnArray<TpccExecPlan> plan,
+    using Executor<TxnParamArrayType, TxnExecPlanArrayType>::records;
+    using Executor<TxnParamArrayType, TxnExecPlanArrayType>::versions;
+    using Executor<TxnParamArrayType, TxnExecPlanArrayType>::config;
+    using Executor<TxnParamArrayType, TxnExecPlanArrayType>::txn;
+    using Executor<TxnParamArrayType, TxnExecPlanArrayType>::plan;
+
+    GpuExecutor(TpccRecords records, TpccVersions versions, TxnParamArrayType txn, TxnExecPlanArrayType plan,
         TpccConfig config)
-        : Executor(records, versions, txn, plan, config){};
+        : Executor<TxnParamArrayType, TxnExecPlanArrayType>(records, versions, txn, plan, config){};
     ~GpuExecutor() override = default;
 
     void execute(uint32_t epoch) override;

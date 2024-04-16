@@ -26,13 +26,14 @@ TpccDb::TpccDb(TpccConfig config)
     , index_input(config.num_txns, config.index_device, false)
     , index_output(config.num_txns, config.index_device)
     , initialization_input(config.num_txns, config.initialize_device, false)
+    , builder(config.num_txns)
 {
     for (int i = 0; i < config.epochs; ++i)
     {
-        txn_array[i] = TxnArray<TpccTxn>(config.num_txns, epic::DeviceType::CPU);
+        txn_array[i] = PackedTxnArray<TpccTxn>(config.num_txns, epic::DeviceType::CPU);
     }
     //    index = std::make_shared<TpccCpuIndex>(config);
-    index = std::make_shared<TpccGpuIndex>(config);
+    index = std::make_shared<TpccGpuIndex<epic::tpcc::TpccTxnArrayT, epic::tpcc::TpccTxnParamArrayT>>(config);
     input_index_bridge.Link(txn_array[0], index_input);
     index_initialization_bridge.Link(index_output, initialization_input);
     if (config.initialize_device == epic::DeviceType::GPU)
@@ -157,15 +158,43 @@ void TpccDb::generateTxns()
     auto &logger = epic::Logger::GetInstance();
     logger.Info("Generating {} txns with mix {} {} {} {} {}", config.num_txns * config.epochs, config.txn_mix.new_order,
         config.txn_mix.payment, config.txn_mix.order_status, config.txn_mix.delivery, config.txn_mix.stock_level);
+    // TpccTxnGenerator generator(config);
+    // for (size_t epoch = 0; epoch < config.epochs; ++epoch)
+    // {
+    //     logger.Info("Generating epoch {}", epoch);
+    //     for (size_t i = 0; i < config.num_txns; ++i)
+    //     {
+    //         BaseTxn *txn = txn_array[epoch].getTxn(i);
+    //         uint32_t timestamp = epoch * config.num_txns + i;
+    //         generator.generateTxn(txn, i, timestamp);
+    //     }
+    // }
+    //
+
     TpccTxnGenerator generator(config);
     for (size_t epoch = 0; epoch < config.epochs; ++epoch)
     {
         logger.Info("Generating epoch {}", epoch);
+        PackedTxnArray<TpccTxn> &txn_input_array = txn_array[epoch];
+        uint32_t curr_size = 0;
         for (size_t i = 0; i < config.num_txns; ++i)
         {
+#if 0
             BaseTxn *txn = txn_array[epoch].getTxn(i);
             uint32_t timestamp = epoch * config.num_txns + i;
-            generator.generateTxn(txn, i, timestamp);
+            generator.generateTxn(txn, timestamp);
+#else
+            TpccTxnType txn_type = generator.getTxnType(i);
+            constexpr uint32_t txn_sizes[6] = {0, epic::BaseTxnSize<NewOrderTxnInput<FixedSizeTxn>>::value,
+                epic::BaseTxnSize<PaymentTxnInput>::value, epic::BaseTxnSize<OrderStatusTxnInput>::value,
+                epic::BaseTxnSize<DeliveryTxnInput>::value, epic::BaseTxnSize<StockLevelTxnInput>::value};
+            txn_input_array.index[i] = curr_size;
+            curr_size += txn_sizes[static_cast<uint32_t>(txn_type)];
+            txn_input_array.size = curr_size;
+            BaseTxn *txn = txn_input_array.getTxn(i);
+            uint32_t timestamp = epoch * config.num_txns + i;
+            generator.generateTxn(txn_type, txn, timestamp);
+#endif
         }
     }
 }
@@ -210,6 +239,7 @@ void TpccDb::runBenchmark()
             input_index_bridge.Link(txn_array[index_epoch_id], index_input);
             input_index_bridge.StartTransfer();
             input_index_bridge.FinishTransfer();
+            builder.buildPackedTxnArrayGpu(index_input, index_output);
 
 #if 0 // DEBUG
             {

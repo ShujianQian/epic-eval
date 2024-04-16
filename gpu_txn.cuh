@@ -47,6 +47,30 @@ public:
     }
 };
 
+class GpuPackedTxnArray
+{
+public:
+    uint8_t *txns = nullptr;
+    uint32_t *index = nullptr;
+    uint32_t size;
+    uint32_t num_txns;
+
+    template <typename TxnType>
+    __device__ __host__ GpuPackedTxnArray(PackedTxnArray<TxnType> &txn_array)
+        : num_txns{txn_array.num_txns}
+        , txns{txn_array.txns}
+        , index{txn_array.index}
+        , size{txn_array.size}
+    {}
+
+    BaseTxn *__device__ __host__ getTxn(size_t txn_id) const
+    {
+        assert(txn_id < num_txns);
+        assert(index[txn_id] < size);
+        return reinterpret_cast<BaseTxn *>(&txns[index[txn_id]]);
+    }
+};
+
 } // namespace epic
 
 #endif // EPIC_CUDA_AVAILABLE

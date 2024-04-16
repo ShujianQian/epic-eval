@@ -9,12 +9,19 @@
 
 namespace epic::tpcc {
 
-class CpuExecutor : public Executor
+template <typename TxnParamArrayType, typename TxnExecPlanArrayType>
+class CpuExecutor : public Executor<TxnParamArrayType, TxnExecPlanArrayType>
 {
 public:
-    CpuExecutor(TpccRecords records, TpccVersions versions, TxnArray<TpccTxnParam> txn, TxnArray<TpccExecPlan> plan,
+    using Executor<TxnParamArrayType, TxnExecPlanArrayType>::records;
+    using Executor<TxnParamArrayType, TxnExecPlanArrayType>::versions;
+    using Executor<TxnParamArrayType, TxnExecPlanArrayType>::config;
+    using Executor<TxnParamArrayType, TxnExecPlanArrayType>::txn;
+    using Executor<TxnParamArrayType, TxnExecPlanArrayType>::plan;
+
+    CpuExecutor(TpccRecords records, TpccVersions versions, TxnParamArrayType txn, TxnExecPlanArrayType plan,
         TpccConfig config)
-        : Executor(records, versions, txn, plan, config){};
+        : Executor<TxnParamArrayType, TxnExecPlanArrayType>(records, versions, txn, plan, config){};
     ~CpuExecutor() override = default;
 
     void execute(uint32_t epoch) override;

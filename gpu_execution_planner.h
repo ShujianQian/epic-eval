@@ -17,6 +17,7 @@
 
 namespace epic {
 
+template <typename TxnExecPlanArrayType>
 class GpuTableExecutionPlanner : public TableExecutionPlanner
 {
 public:
@@ -40,15 +41,15 @@ public:
     void *d_rw_locations = nullptr;
     void *d_copy_dep_locations = nullptr;
 
+    TxnExecPlanArrayType &exec_plan;
     void *d_output_txn_array;
     size_t output_txn_array_baseTxn_size;
 
     std::any cuda_stream;
     //    void *d_scratch_array = nullptr; /* for cub sort and scan */
 
-    template<typename TxnType>
-    GpuTableExecutionPlanner(std::string_view name, Allocator &allocator, size_t record_size, size_t max_ops_per_txn,
-        size_t max_num_txns, size_t max_num_records, TxnArray<TxnType> &txn_array)
+    GpuTableExecutionPlanner<TxnExecPlanArrayType>(std::string_view name, Allocator &allocator, size_t record_size,
+        size_t max_ops_per_txn, size_t max_num_txns, size_t max_num_records, TxnExecPlanArrayType &txn_array)
         : name(name)
         , record_size(record_size)
         , allocator(allocator)
@@ -56,9 +57,11 @@ public:
         , max_num_txns(max_num_txns + 1)
         , max_num_records(max_num_records)
         , max_num_ops(max_num_txns * max_ops_per_txn)
-        , output_txn_array_baseTxn_size(TxnArray<TxnType>::kBaseTxnSize)
-        , d_output_txn_array(txn_array.txns){};
-    virtual ~GpuTableExecutionPlanner() = default;
+        , exec_plan(txn_array)
+        // , output_txn_array_baseTxn_size(0)
+        // , d_output_txn_array(txn_array.txns)
+    {};
+    ~GpuTableExecutionPlanner<TxnExecPlanArrayType>() override = default;
     void Initialize() override;
     void SubmitOps(CalcNumOpsFunc pre_submit_ops_func, SubmitOpsFunc submit_ops_func) override;
     void InitializeExecutionPlan() override;

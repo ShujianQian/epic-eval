@@ -218,7 +218,7 @@ __device__ __forceinline__ void gpuExecTpccTxn(epic::tpcc::TpccConfig config, Tp
 }
 
 __global__ void gpuExecKernel(epic::tpcc::TpccConfig config, TpccRecords records, Executor::TpccTableLocks table_locks,
-    GpuTxnArray txn, uint32_t num_txns)
+    epic::GpuPackedTxnArray txn, uint32_t num_txns)
 {
     __shared__ uint32_t block_counter;
     /* one thread loads txn id for the entire warp */
@@ -286,7 +286,7 @@ void GpuExecutor::execute(uint32_t epoch)
     constexpr uint32_t block_size = 256;
 
     gpuExecKernel<<<(config.num_txns + block_size - 1) / block_size, block_size>>>(
-        config, records, table_locks, GpuTxnArray(txn), config.num_txns);
+        config, records, table_locks, epic::GpuPackedTxnArray(txn), config.num_txns);
     gpu_err_check(cudaPeekAtLastError());
     gpu_err_check(cudaDeviceSynchronize());
 }

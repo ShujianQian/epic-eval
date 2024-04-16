@@ -14,6 +14,7 @@
 namespace gacco::tpcc {
 
 using epic::TxnArray;
+using epic::PackedTxnArray;
 
 class Executor
 {
@@ -23,10 +24,10 @@ public:
         GaccoTableLock warehouse, district, customer, history, new_order, order, order_line, item, stock;
     } table_locks;
     epic::tpcc::TpccConfig config;
-    TxnArray<TpccTxnParam> txn;
+    PackedTxnArray<TpccTxnParam> txn;
     TpccRecords records;
 
-    Executor(TpccRecords records, TpccTableLocks table_locks, TxnArray<TpccTxnParam> txn, epic::tpcc::TpccConfig config)
+    Executor(TpccRecords records, TpccTableLocks table_locks, PackedTxnArray<TpccTxnParam> txn, epic::tpcc::TpccConfig config)
         : table_locks(table_locks)
         , records(records)
         , txn(txn)

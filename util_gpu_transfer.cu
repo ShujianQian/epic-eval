@@ -11,7 +11,7 @@ namespace epic {
 std::any createGpuStream()
 {
     cudaStream_t stream;
-    gpu_err_check(cudaStreamCreate(&stream));
+    gpu_err_check(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking));
     return stream;
 }
 

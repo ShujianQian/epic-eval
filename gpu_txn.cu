@@ -16,6 +16,7 @@ void *createGpuTxnArrayStorage(size_t size)
     logger.Trace("Allocating {} bytes for GPU txn array", formatSizeBytes(size));
     void *ptr = nullptr;
     gpu_err_check(cudaMalloc(&ptr, size));
+    gpu_err_check(cudaMemset(ptr, 0, size));
     return ptr;
 }
 

@@ -247,6 +247,44 @@ void runTransaction(NewOrderTxnInput<FixedSizeTxn> *txn);
 void runTransaction(PaymentTxnInput *txn);
 void runTransaction(OrderStatusTxnInput *txn);
 void runTransaction(DeliveryTxnInput *txn);
+
+template <typename TxnType>
+using TpccBaseTxnArrayT = PackedTxnArray<TxnType>;
+using TpccTxnArrayT = TpccBaseTxnArrayT<TpccTxn>;
+using TpccTxnParamArrayT = TpccBaseTxnArrayT<TpccTxnParam>;
+using TpccTxnExecPlanArrayT = TpccBaseTxnArrayT<TpccExecPlan>;
+
+// template <typename SrcTxnType, typename DestTxnType>
+// void buildPackedTxnArrayGpu(PackedTxnArray<SrcTxnType> &src, PackedTxnArray<DestTxnType> &dest) {}
+//
+// template <>
+// void buildPackedTxnArrayGpu(PackedTxnArray<TpccTxn> &src, PackedTxnArray<TpccTxnParam> &dest);
+// template <>
+// void buildPackedTxnArrayGpu(PackedTxnArray<TpccTxn> &src, PackedTxnArray<TpccExecPlan> &dest);
+
+class TpccPackedTxnArrayBuilder
+{
+    uint32_t num_txns;
+    uint32_t *temp_storage = nullptr;
+    uint32_t *txn_sizes = nullptr;
+    size_t temp_storage_bytes = 0;
+public:
+    explicit TpccPackedTxnArrayBuilder(uint32_t num_txns);
+
+    template <typename SrcTxnType, typename DestTxnType>
+    void buildPackedTxnArrayGpu(PackedTxnArray<SrcTxnType> &src, PackedTxnArray<DestTxnType> &dest)
+    {
+        throw std::runtime_error("build Packed Txn Array is not implemented for the input types");
+    }
+};
+
+template<>
+void TpccPackedTxnArrayBuilder::buildPackedTxnArrayGpu(
+    PackedTxnArray<TpccTxn> &src, PackedTxnArray<TpccTxnParam> &dest);
+template<>
+void TpccPackedTxnArrayBuilder::buildPackedTxnArrayGpu(
+    PackedTxnArray<TpccTxn> &src, PackedTxnArray<TpccExecPlan> &dest);
+
 } // namespace epic::tpcc
 
 #endif // TPCC_TXN_H

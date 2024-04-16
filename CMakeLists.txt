@@ -65,6 +65,7 @@ set(EPIC_GPU_SOURCE
         benchmarks/ycsb_gpu_submitter.cu
         benchmarks/ycsb_gpu_executor.cu
         benchmarks/tpcc_gpu_aux_index.cu
+        benchmarks/tpcc_gpu_txn.cu
 )
 
 set(GACCO_GPU_SOURCE

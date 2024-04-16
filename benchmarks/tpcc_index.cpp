@@ -14,7 +14,8 @@
 
 namespace epic::tpcc {
 
-TpccCpuIndex::TpccCpuIndex(const TpccConfig &tpcc_config)
+template <typename TxnArrayType, typename TxnParamArrayType>
+TpccCpuIndex<TxnArrayType, TxnParamArrayType>::TpccCpuIndex(const TpccConfig &tpcc_config)
     : tpcc_config(tpcc_config)
     , g_warehouse_index(new StdUnorderedMapIndex<WarehouseKey::baseType, uint32_t>(tpcc_config.warehouseTableSize()))
     , g_district_index(new StdUnorderedMapIndex<DistrictKey::baseType, uint32_t>(tpcc_config.districtTableSize()))
@@ -32,7 +33,8 @@ TpccCpuIndex::TpccCpuIndex(const TpccConfig &tpcc_config)
 
 {}
 
-void TpccCpuIndex::indexTxnWrites(BaseTxn *txn, BaseTxn *index, uint32_t epoch_id)
+template <typename TxnArrayType, typename TxnParamArrayType>
+void TpccCpuIndex<TxnArrayType, TxnParamArrayType>::indexTxnWrites(BaseTxn *txn, BaseTxn *index, uint32_t epoch_id)
 {
     index->txn_type = txn->txn_type;
     switch (static_cast<TpccTxnType>(txn->txn_type))
@@ -50,7 +52,8 @@ void TpccCpuIndex::indexTxnWrites(BaseTxn *txn, BaseTxn *index, uint32_t epoch_i
     }
 }
 
-void TpccCpuIndex::indexTxnReads(BaseTxn *txn, BaseTxn *index, uint32_t epoch_id)
+template <typename TxnArrayType, typename TxnParamArrayType>
+void TpccCpuIndex<TxnArrayType, TxnParamArrayType>::indexTxnReads(BaseTxn *txn, BaseTxn *index, uint32_t epoch_id)
 {
     index->txn_type = txn->txn_type;
     switch (static_cast<TpccTxnType>(txn->txn_type))
@@ -69,7 +72,8 @@ void TpccCpuIndex::indexTxnReads(BaseTxn *txn, BaseTxn *index, uint32_t epoch_id
 }
 
 /* Txns' writes need to be indexed before reads */
-void TpccCpuIndex::indexTxnWrites(NewOrderTxnInput<FixedSizeTxn> *txn, void *index_ptr, uint32_t epoch_id)
+template <typename TxnArrayType, typename TxnParamArrayType>
+void TpccCpuIndex<TxnArrayType, TxnParamArrayType>::indexTxnWrites(NewOrderTxnInput<FixedSizeTxn> *txn, void *index_ptr, uint32_t epoch_id)
 {
     auto index = static_cast<NewOrderTxnParams<FixedSizeTxn> *>(index_ptr);
     OrderKey order_key = {txn->o_id, txn->d_id, txn->origin_w_id};
@@ -93,7 +97,8 @@ void TpccCpuIndex::indexTxnWrites(NewOrderTxnInput<FixedSizeTxn> *txn, void *ind
     }
 }
 
-void TpccCpuIndex::indexTxnReads(NewOrderTxnInput<FixedSizeTxn> *txn, void *index_ptr, uint32_t epoch_id)
+template <typename TxnArrayType, typename TxnParamArrayType>
+void TpccCpuIndex<TxnArrayType, TxnParamArrayType>::indexTxnReads(NewOrderTxnInput<FixedSizeTxn> *txn, void *index_ptr, uint32_t epoch_id)
 {
     auto index = static_cast<NewOrderTxnParams<FixedSizeTxn> *>(index_ptr);
     CustomerKey customer_key = {txn->c_id, txn->d_id, txn->origin_w_id};
@@ -108,7 +113,9 @@ void TpccCpuIndex::indexTxnReads(NewOrderTxnInput<FixedSizeTxn> *txn, void *inde
         index->items[i].item_id = g_item_index->search(item_key.base_key);
     }
 }
-void TpccCpuIndex::indexTxnWrites(PaymentTxnInput *txn, void *index_ptr, uint32_t epoch_id)
+
+template <typename TxnArrayType, typename TxnParamArrayType>
+void TpccCpuIndex<TxnArrayType, TxnParamArrayType>::indexTxnWrites(PaymentTxnInput *txn, void *index_ptr, uint32_t epoch_id)
 {
     auto index = static_cast<PaymentTxnParams *>(index_ptr);
     WarehouseKey warehouse_key{txn->warehouse_id};
@@ -120,9 +127,11 @@ void TpccCpuIndex::indexTxnWrites(PaymentTxnInput *txn, void *index_ptr, uint32_
     index->payment_amount = txn->payment_amount;
 }
 
-void TpccCpuIndex::indexTxnReads(PaymentTxnInput *txn, void *index_ptr, uint32_t epoch_id) {}
+template <typename TxnArrayType, typename TxnParamArrayType>
+void TpccCpuIndex<TxnArrayType, TxnParamArrayType>::indexTxnReads(PaymentTxnInput *txn, void *index_ptr, uint32_t epoch_id) {}
 
-void TpccCpuIndex::loadInitialData()
+template <typename TxnArrayType, typename TxnParamArrayType>
+void TpccCpuIndex<TxnArrayType, TxnParamArrayType>::loadInitialData()
 {
     auto &logger = Logger::GetInstance();
     logger.Info("Loading initial data");
@@ -149,7 +158,8 @@ void TpccCpuIndex::loadInitialData()
     loadStockTable();
 }
 
-void TpccCpuIndex::loadWarehouseTable()
+template <typename TxnArrayType, typename TxnParamArrayType>
+void TpccCpuIndex<TxnArrayType, TxnParamArrayType>::loadWarehouseTable()
 {
     std::vector<uint32_t> warehouse_ids(tpcc_config.num_warehouses);
     for (uint32_t i = 0; i < tpcc_config.num_warehouses; ++i)
@@ -159,7 +169,8 @@ void TpccCpuIndex::loadWarehouseTable()
     /* TODO: populate data in Warehouse Table */
 }
 
-void TpccCpuIndex::loadDistrictTable()
+template <typename TxnArrayType, typename TxnParamArrayType>
+void TpccCpuIndex<TxnArrayType, TxnParamArrayType>::loadDistrictTable()
 {
     std::vector<uint32_t> district_ids(tpcc_config.num_warehouses * 10);
     size_t i = 0;
@@ -173,7 +184,8 @@ void TpccCpuIndex::loadDistrictTable()
     /* TODO: populate data in District Table */
 }
 
-void TpccCpuIndex::loadCustomerTable()
+template <typename TxnArrayType, typename TxnParamArrayType>
+void TpccCpuIndex<TxnArrayType, TxnParamArrayType>::loadCustomerTable()
 {
     std::vector<uint32_t> customer_ids(tpcc_config.num_warehouses * 10 * 3'000);
     size_t i = 0;
@@ -190,12 +202,14 @@ void TpccCpuIndex::loadCustomerTable()
     /* TODO: populate data in Customer Table */
 }
 
-void TpccCpuIndex::loadHistoryTable()
+template <typename TxnArrayType, typename TxnParamArrayType>
+void TpccCpuIndex<TxnArrayType, TxnParamArrayType>::loadHistoryTable()
 {
     /* TODO: implement loadHistoryTable */
 }
 
-void TpccCpuIndex::loadOrderTables()
+template <typename TxnArrayType, typename TxnParamArrayType>
+void TpccCpuIndex<TxnArrayType, TxnParamArrayType>::loadOrderTables()
 {
     std::vector<uint32_t> order_ids(tpcc_config.num_warehouses * 10 * 3'000);
     std::vector<uint32_t> new_order_ids(tpcc_config.num_warehouses * 10 * 900);
@@ -223,7 +237,8 @@ void TpccCpuIndex::loadOrderTables()
     /* TODO: populate data in Order Table and New Order Table */
 }
 
-void TpccCpuIndex::loadItemTable()
+template <typename TxnArrayType, typename TxnParamArrayType>
+void TpccCpuIndex<TxnArrayType, TxnParamArrayType>::loadItemTable()
 {
     std::vector<uint32_t> item_ids(100'000);
     size_t i = 0;
@@ -234,7 +249,8 @@ void TpccCpuIndex::loadItemTable()
     /* TODO: populate data in Item Table */
 }
 
-void TpccCpuIndex::loadStockTable()
+template <typename TxnArrayType, typename TxnParamArrayType>
+void TpccCpuIndex<TxnArrayType, TxnParamArrayType>::loadStockTable()
 {
     std::vector<uint32_t> stock_ids(tpcc_config.num_warehouses * 100'000);
     size_t i = 0;
@@ -248,7 +264,9 @@ void TpccCpuIndex::loadStockTable()
     /* TODO: populate data in Stock Table */
 }
 
-void TpccCpuIndex::indexTxns(TxnArray<TpccTxn> &txn_array, TxnArray<TpccTxnParam> &index_array, uint32_t index_epoch_id)
+template <typename TxnArrayType, typename TxnParamArrayType>
+void TpccCpuIndex<TxnArrayType, TxnParamArrayType>::indexTxns(
+    TxnArrayType &txn_array, TxnParamArrayType &index_array, uint32_t index_epoch_id)
 {
     /* it's important to index writes before reads */
     for (uint32_t i = 0; i < tpcc_config.num_txns; ++i)
@@ -264,5 +282,7 @@ void TpccCpuIndex::indexTxns(TxnArray<TpccTxn> &txn_array, TxnArray<TpccTxnParam
         indexTxnReads(txn, txn_param, index_epoch_id);
     }
 }
+
+template class TpccCpuIndex<TpccTxnArrayT, TpccTxnParamArrayT>;
 
 } // namespace epic::tpcc

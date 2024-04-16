@@ -35,6 +35,31 @@ void TpccTxnGenerator::generateTxn(epic::BaseTxn *txn, uint32_t txn_id, uint32_t
     }
 }
 
+void TpccTxnGenerator::generateTxn(TpccTxnType txn_type, epic::BaseTxn *txn, uint32_t timestamp) {
+
+    txn->txn_type = static_cast<uint32_t>(txn_type);
+    switch (txn_type)
+    {
+    case TpccTxnType::NEW_ORDER:
+        epic::tpcc::TpccTxnGenerator::generateTxn(reinterpret_cast<epic::tpcc::NewOrderTxnInput<FixedSizeTxn> *>(txn->data), timestamp);
+        break;
+    case TpccTxnType::PAYMENT:
+        epic::tpcc::TpccTxnGenerator::generateTxn(reinterpret_cast<PaymentTxnInput *>(txn->data), timestamp);
+        break;
+    case TpccTxnType::ORDER_STATUS:
+        epic::tpcc::TpccTxnGenerator::generateTxn(reinterpret_cast<OrderStatusTxnInput *>(txn->data), timestamp);
+        break;
+    case TpccTxnType::DELIVERY:
+        epic::tpcc::TpccTxnGenerator::generateTxn(reinterpret_cast<DeliveryTxnInput *>(txn->data), timestamp);
+        break;
+    case TpccTxnType::STOCK_LEVEL:
+        epic::tpcc::TpccTxnGenerator::generateTxn(reinterpret_cast<StockLevelTxnInput *>(txn->data), timestamp);
+        break;
+    default:
+        break;
+    }
+}
+
 TpccTxnType TpccTxnGenerator::getTxnType(uint32_t txn_id)
 {
     auto &logger = epic::Logger::GetInstance();

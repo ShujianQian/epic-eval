@@ -17,6 +17,7 @@
 namespace gacco::tpcc {
 
 using epic::TxnArray;
+using epic::PackedTxnArray;
 
 class TpccGpuSubmitter : public TpccSubmitter
 {
@@ -30,7 +31,7 @@ public:
         TableSubmitDest order_line_submit_dest, TableSubmitDest item_submit_dest, TableSubmitDest stock_submit_dest, TpccConfig config);
     ~TpccGpuSubmitter();
 
-    void submit(TxnArray<TpccTxnParam> &txn_array);
+    void submit(PackedTxnArray<TpccTxnParam> &txn_array);
 };
 
 } // namespace gacco::tpcc

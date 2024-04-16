@@ -14,10 +14,11 @@
 
 namespace epic::tpcc {
 
+template <typename TxnArrayType, typename TxnParamArrayType>
 class TpccIndex
 {
 public:
-    virtual void indexTxns(TxnArray<TpccTxn> &txn_array, TxnArray<TpccTxnParam> &index_array, uint32_t epoch_id) = 0;
+    virtual void indexTxns(TxnArrayType &txn_array, TxnParamArrayType &index_array, uint32_t epoch_id) = 0;
     virtual void loadInitialData() = 0;
     virtual ~TpccIndex() = default;
 };
@@ -62,7 +63,8 @@ public:
 //    friend class TpccLoader;
 //};
 
-class TpccCpuIndex : public TpccIndex
+template <typename TxnArrayType, typename TxnParamArrayType>
+class TpccCpuIndex : public TpccIndex<TxnArrayType, TxnParamArrayType>
 {
 private:
     std::unique_ptr<BaseIndex<WarehouseKey::baseType, uint32_t>> g_warehouse_index;
@@ -97,7 +99,7 @@ public:
     void loadStockTable();
 
     void loadInitialData() override;
-    void indexTxns(TxnArray<TpccTxn> &txn_array, TxnArray<TpccTxnParam> &index_array, uint32_t epoch_id) override;
+    void indexTxns(TxnArrayType &txn_array, TxnParamArrayType &index_array, uint32_t epoch_id) override;
 
     friend class TpccLoader;
 };

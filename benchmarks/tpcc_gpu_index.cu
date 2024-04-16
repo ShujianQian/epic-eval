@@ -2,6 +2,8 @@
 // Created by Shujian Qian on 2023-11-20.
 //
 
+#include "tpcc_gpu_txn.cuh"
+
 #include <cmath>
 #include <memory>
 #include <cuda/std/atomic>
@@ -73,7 +75,8 @@ __device__ __forceinline__ void tpccPrepareInsertIndex(PaymentTxnInput *txn, Ord
     }
 }
 
-__global__ void prepareTpccIndexKernel(GpuTxnArray txn, OrderKey::baseType *order_insert,
+template <typename GpuTxnArrayType>
+__global__ void prepareTpccIndexKernel(GpuTxnArrayType txn, OrderKey::baseType *order_insert,
     NewOrderKey::baseType *new_order_insert, OrderLineKey::baseType *orderline_insert, uint32_t num_txns)
 {
     uint32_t tid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -537,8 +540,9 @@ void __device__ __forceinline__ indexTpccTxn(StockLevelTxnInput *txn, StockLevel
     index->threshold = txn->threshold;
 }
 
+template <typename GpuTxnArrayType, typename GpuTxnIndexArrayType>
 __global__ void indexTpccTxnKernel(
-    GpuTxnArray txn, GpuTxnArray index, tpccGpuIndexFindView index_view, uint32_t num_txns)
+    GpuTxnArrayType txn, GpuTxnIndexArrayType index, tpccGpuIndexFindView index_view, uint32_t num_txns)
 {
 
     uint32_t tid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -615,6 +619,7 @@ public:
 };
 } // namespace
 
+template <typename TxnArrayType, typename TxnParamArrayType, typename GpuTxnArrayType>
 class TpccGpuIndexImpl
 {
 public:
@@ -976,7 +981,7 @@ public:
 #endif
     }
 
-    void indexTxns(TxnArray<TpccTxn> &txn_array, TxnArray<TpccTxnParam> &index_array, uint32_t epoch_id)
+    void indexTxns(TxnArrayType &txn_array, TxnParamArrayType &index_array, uint32_t epoch_id)
     {
         if (txn_array.device != DeviceType::GPU || index_array.device != DeviceType::GPU)
         {
@@ -984,9 +989,11 @@ public:
         }
         auto &logger = Logger::GetInstance();
 
+        // TODO: revert hack
+        // using GpuTxnArrayTypeHack = typename std::conditional_t<std::is_same_v<TxnArrayType, TxnArray<TpccTxn>>, GpuTxnArray, GpuPackedTxnArray>;
         constexpr uint32_t block_size = 512;
         prepareTpccIndexKernel<<<(tpcc_config.num_txns + block_size - 1) / block_size, block_size>>>(
-            GpuTxnArray(txn_array), d_order_insert, d_new_order_insert, d_order_line_insert, tpcc_config.num_txns);
+            GpuPackedTxnArray(txn_array), d_order_insert, d_new_order_insert, d_order_line_insert, tpcc_config.num_txns);
 
         gpu_err_check(cudaPeekAtLastError());
 
@@ -1027,30 +1034,38 @@ public:
         logger.Trace("New order free rows used: {}", new_order_free_start);
         logger.Trace("Order line free rows used: {}", order_line_free_start);
 
+        // TODO: revert hack
         indexTpccTxnKernel<<<(tpcc_config.num_txns + block_size - 1) / block_size, block_size>>>(
-            GpuTxnArray(txn_array), GpuTxnArray(index_array), index_device_view, tpcc_config.num_txns);
+            GpuPackedTxnArray(txn_array), GpuTxnArrayType(index_array), index_device_view, tpcc_config.num_txns);
         gpu_err_check(cudaPeekAtLastError());
         gpu_err_check(cudaDeviceSynchronize());
         logger.Info("Finished indexing transactions");
     }
 };
 
-TpccGpuIndex::TpccGpuIndex(TpccConfig tpcc_config)
+template <typename TxnArrayType, typename TxnParamArrayType>
+TpccGpuIndex<TxnArrayType, TxnParamArrayType>::TpccGpuIndex(TpccConfig tpcc_config)
     : tpcc_config(tpcc_config)
 {
-    gpu_index_impl = std::make_any<TpccGpuIndexImpl>(tpcc_config);
+    gpu_index_impl = std::make_any<TpccGpuIndexImpl<TxnArrayType, TxnParamArrayType, TpccGpuTxnArrayT>>(tpcc_config);
 }
 
-void TpccGpuIndex::loadInitialData()
+template <typename TxnArrayType, typename TxnParamArrayType>
+void TpccGpuIndex<TxnArrayType, TxnParamArrayType>::loadInitialData()
 {
-    auto &impl = std::any_cast<TpccGpuIndexImpl &>(gpu_index_impl);
+    auto &impl = std::any_cast<TpccGpuIndexImpl<TxnArrayType, TxnParamArrayType, TpccGpuTxnArrayT> &>(gpu_index_impl);
     impl.loadInitialData();
 }
 
-void TpccGpuIndex::indexTxns(TxnArray<TpccTxn> &txn_array, TxnArray<TpccTxnParam> &index_array, uint32_t epoch_id)
+template <typename TxnArrayType, typename TxnParamArrayType>
+void TpccGpuIndex<TxnArrayType, TxnParamArrayType>::indexTxns(
+    TxnArrayType &txn_array, TxnParamArrayType &index_array, uint32_t epoch_id)
 {
-    auto &impl = std::any_cast<TpccGpuIndexImpl &>(gpu_index_impl);
+    auto &impl = std::any_cast<TpccGpuIndexImpl<TxnArrayType, TxnParamArrayType, TpccGpuTxnArrayT> &>(gpu_index_impl);
     impl.indexTxns(txn_array, index_array, epoch_id);
 }
+
+template class TpccGpuIndex<TpccTxnArrayT, TpccTxnParamArrayT>;
+// template class TpccGpuIndex<TxnArray<TpccTxn>, TpccTxnParamArrayT>;
 
 } // namespace epic::tpcc

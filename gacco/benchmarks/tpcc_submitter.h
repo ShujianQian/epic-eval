@@ -64,7 +64,7 @@ public:
         , config(config)
     {}
 
-    virtual void submit(TxnArray<TpccTxnParam> &txn_array)
+    virtual void submit(epic::PackedTxnArray<TpccTxnParam> &txn_array)
     {
         auto &logger = epic::Logger::GetInstance();
         logger.Error("TpccSubmittor::submit not implemented");

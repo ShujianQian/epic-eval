@@ -12,7 +12,8 @@
 
 namespace epic::tpcc {
 
-class TpccGpuIndex : public TpccIndex
+template <typename TxnArrayType, typename TxnParamArrayType>
+class TpccGpuIndex : public TpccIndex<TxnArrayType, TxnParamArrayType>
 {
 public:
     TpccConfig tpcc_config;
@@ -20,7 +21,7 @@ public:
     explicit TpccGpuIndex(TpccConfig tpcc_config);
 
     void loadInitialData() override;
-    void indexTxns(TxnArray<TpccTxn> &txn_array, TxnArray<TpccTxnParam> &index_array, uint32_t epoch_id) override;
+    void indexTxns(TxnArrayType &txn_array, TxnParamArrayType &index_array, uint32_t epoch_id) override;
 
 };
 

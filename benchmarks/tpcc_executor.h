@@ -13,15 +13,16 @@
 
 namespace epic::tpcc {
 
+template <typename TxnParamArrayType, typename TxnExecPlanArrayType>
 class Executor
 {
 public:
     TpccRecords records;
     TpccVersions versions;
-    TxnArray<TpccTxnParam> txn;
-    TxnArray<TpccExecPlan> plan;
+    TxnParamArrayType txn;
+    TxnExecPlanArrayType plan;
     TpccConfig config;
-    Executor(TpccRecords records, TpccVersions versions, TxnArray<TpccTxnParam> txn, TxnArray<TpccExecPlan> plan,
+    Executor(TpccRecords records, TpccVersions versions, TxnParamArrayType txn, TxnExecPlanArrayType plan,
         TpccConfig config)
         : records(records)
         , versions(versions)

@@ -4,6 +4,7 @@
 
 #include "benchmarks/tpcc_gpu_submitter.h"
 #include "execution_planner.h"
+#include "tpcc_gpu_txn.cuh"
 
 #include "util_log.h"
 #include "util_gpu_error_check.cuh"
@@ -16,23 +17,25 @@
 
 namespace epic::tpcc {
 
-TpccGpuSubmitter::TpccGpuSubmitter(TableSubmitDest warehouse_submit_dest, TableSubmitDest district_submit_dest,
+template <typename TxnParamArrayType>
+TpccGpuSubmitter<TxnParamArrayType>::TpccGpuSubmitter(TableSubmitDest warehouse_submit_dest, TableSubmitDest district_submit_dest,
     TableSubmitDest customer_submit_dest, TableSubmitDest history_submit_dest, TableSubmitDest new_order_submit_dest,
     TableSubmitDest order_submit_dest, TableSubmitDest order_line_submit_dest, TableSubmitDest item_submit_dest,
     TableSubmitDest stock_submit_dest)
-    : TpccSubmitter(warehouse_submit_dest, district_submit_dest, customer_submit_dest, history_submit_dest,
+    : TpccSubmitter<TxnParamArrayType>(warehouse_submit_dest, district_submit_dest, customer_submit_dest, history_submit_dest,
           new_order_submit_dest, order_submit_dest, order_line_submit_dest, item_submit_dest, stock_submit_dest)
 {
     for (int i = 0; i < 9; i++)
     {
         cudaStream_t stream;
-        //        gpu_err_check(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking));
-        gpu_err_check(cudaStreamCreate(&stream));
+        gpu_err_check(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking));
+        // gpu_err_check(cudaStreamCreate(&stream));
         cuda_streams.emplace_back(stream);
     }
 }
 
-TpccGpuSubmitter::~TpccGpuSubmitter()
+template <typename TxnParamArrayType>
+TpccGpuSubmitter<TxnParamArrayType>::~TpccGpuSubmitter()
 {
     for (auto &stream : cuda_streams)
     {
@@ -180,14 +183,15 @@ static void __device__ __forceinline__ prepareSubmitTpccTxn(int txn_id, StockLev
     num_ops.stock_num_ops[txn_id] = txn->num_items;
 }
 
-static __global__ void prepareSubmitTpccTxn(TxnArray<TpccTxnParam> txn_array, TpccNumOps num_ops)
+template <typename GpuTxnArrayType>
+static __global__ void prepareSubmitTpccTxn(GpuTxnArrayType txn_array, TpccNumOps num_ops)
 {
     int txn_id = blockIdx.x * blockDim.x + threadIdx.x;
     if (txn_id >= txn_array.num_txns)
     {
         return;
     }
-    BaseTxn *base_txn = reinterpret_cast<BaseTxn *>((uint8_t *)txn_array.txns + txn_array.kBaseTxnSize * txn_id);
+    BaseTxn *base_txn = txn_array.getTxn(txn_id);
     switch (static_cast<TpccTxnType>(base_txn->txn_type))
     {
     case TpccTxnType::NEW_ORDER:
@@ -320,14 +324,15 @@ static __device__ __forceinline__ void submitTpccTxn(
     }
 }
 
-static __global__ void submitTpccTxn(TxnArray<TpccTxnParam> txn_array, TpccSubmitLocations submit_loc)
+template <typename GpuTxnArrayType>
+static __global__ void submitTpccTxn(GpuTxnArrayType txn_array, TpccSubmitLocations submit_loc)
 {
     int txn_id = blockIdx.x * blockDim.x + threadIdx.x;
     if (txn_id >= txn_array.num_txns)
     {
         return;
     }
-    BaseTxn *base_txn = reinterpret_cast<BaseTxn *>((uint8_t *)txn_array.txns + txn_array.kBaseTxnSize * txn_id);
+    BaseTxn *base_txn = txn_array.getTxn(txn_id);
     switch (static_cast<TpccTxnType>(base_txn->txn_type))
     {
     case TpccTxnType::NEW_ORDER:
@@ -350,7 +355,8 @@ static __global__ void submitTpccTxn(TxnArray<TpccTxnParam> txn_array, TpccSubmi
     }
 }
 
-void TpccGpuSubmitter::submit(TxnArray<TpccTxnParam> &txn_array)
+template <typename TxnParamArrayType>
+void TpccGpuSubmitter<TxnParamArrayType>::submit(TxnParamArrayType &txn_array)
 {
     auto &logger = Logger::GetInstance();
 
@@ -365,7 +371,7 @@ void TpccGpuSubmitter::submit(TxnArray<TpccTxnParam> &txn_array)
         .stock_num_ops = stock_submit_dest.d_num_ops};
 
     prepareSubmitTpccTxn<<<(txn_array.num_txns + 1024) / 1024, 1024, 0, std::any_cast<cudaStream_t>(cuda_streams[0])>>>(
-        txn_array, num_ops);
+        TpccGpuTxnArrayT(txn_array), num_ops);
 
     gpu_err_check(cudaGetLastError());
     gpu_err_check(cudaStreamSynchronize(std::any_cast<cudaStream_t>(cuda_streams[0])));
@@ -445,7 +451,7 @@ void TpccGpuSubmitter::submit(TxnArray<TpccTxnParam> &txn_array)
     };
 
     submitTpccTxn<<<(txn_array.num_txns + 1024) / 1024, 1024, 0, std::any_cast<cudaStream_t>(cuda_streams[0])>>>(
-        txn_array, locs);
+        TpccGpuTxnArrayT(txn_array), locs);
 
     gpu_err_check(cudaGetLastError());
     for (auto &stream : cuda_streams)
@@ -474,5 +480,7 @@ void TpccGpuSubmitter::submit(TxnArray<TpccTxnParam> &txn_array)
     }
 #endif
 }
+
+template class TpccGpuSubmitter<TpccTxnParamArrayT>;
 
 } // namespace epic::tpcc
