@@ -41,7 +41,8 @@ set(EPIC_CPU_SOURCE
         benchmarks/tpcc_txn_gen.cpp
         txn_bridge.cpp
         benchmarks/tpcc_cpu_executor.cpp
-        benchmarks/ycsb_cpu_executor.cpp)
+        benchmarks/ycsb_cpu_executor.cpp
+)
 
 set(GACCO_CPU_SOURCE
         gacco/benchmarks/tpcc.cpp
@@ -66,6 +67,7 @@ set(EPIC_GPU_SOURCE
         benchmarks/ycsb_gpu_executor.cu
         benchmarks/tpcc_gpu_aux_index.cu
         benchmarks/tpcc_gpu_txn.cu
+        benchmarks/micro.cu
 )
 
 set(GACCO_GPU_SOURCE
@@ -100,6 +102,11 @@ target_link_libraries(epic ${JEMALLOC_LIBRARIES})
 add_executable(epic_driver main.cpp)
 target_link_libraries(epic_driver epic)
 target_link_libraries(epic_driver ${JEMALLOC_LIBRARIES})
+
+add_executable(micro_driver micro_driver.cu)
+set_property(TARGET micro_driver PROPERTY CUDA_ARCHITECTURES 86)
+target_link_libraries(micro_driver epic)
+target_link_libraries(micro_driver ${JEMALLOC_LIBRARIES})
 
 if (CUDA_FOUND)
 #    add_executable(test_epic ${CMAKE_SOURCE_DIR}/tests/unit_tests/test_gpu_table.cu)

@@ -18,6 +18,7 @@
 #include <benchmarks/tpcc_gpu_txn.cuh>
 #include <benchmarks/tpcc_txn.h>
 #include <benchmarks/ycsb_txn.h>
+#include <benchmarks/micro_txn.h>
 #include <benchmarks/ycsb_gpu_txn.cuh>
 
 namespace epic {
@@ -280,7 +281,9 @@ void GpuTableExecutionPlanner<TxnExecPlanArrayType>::InitializeExecutionPlan()
     // TODO: fix this disgusting stuff by moving everything into a .cuh file
     using GpuTxnArrayType =
         typename std::conditional_t<std::is_same_v<TxnExecPlanArrayType, tpcc::TpccTxnExecPlanArrayT>,
-            tpcc::TpccGpuTxnArrayT, ycsb::YcsbGpuTxnArrayT>;
+            tpcc::TpccGpuTxnArrayT,
+            typename std::conditional_t<std::is_same_v<TxnExecPlanArrayType, TxnArray<ycsb::YcsbExecPlan>>,
+                ycsb::YcsbGpuTxnArrayT, GpuTxnArray>>;
     scatterRWLocation<<<(curr_num_ops + 255) / 256, 256, 0, std::any_cast<cudaStream_t>(cuda_stream)>>>(
         static_cast<op_t *>(d_sorted_ops), static_cast<OperationT *>(d_rw_ops_type),
         static_cast<uint32_t *>(d_tver_write_ops_before), GpuTxnArrayType(exec_plan),
@@ -288,7 +291,7 @@ void GpuTableExecutionPlanner<TxnExecPlanArrayType>::InitializeExecutionPlan()
     // TODO: again, disgusting hack
     static_assert(
         std::is_same_v<TxnExecPlanArrayType, tpcc::TpccTxnExecPlanArrayT> || std::is_same_v < TxnExecPlanArrayType,
-        TxnArray<ycsb::YcsbExecPlan>>);
+        TxnArray<ycsb::YcsbExecPlan>> || std::is_same_v < TxnExecPlanArrayType, TxnArray<micro::MicroTxnExecPlan>>);
     gpu_err_check(cudaGetLastError());
 }
 
@@ -357,5 +360,6 @@ void GpuTableExecutionPlanner<TxnExecPlanArrayType>::ScatterOpLocations() {}
 
 template class GpuTableExecutionPlanner<tpcc::TpccTxnExecPlanArrayT>;
 template class GpuTableExecutionPlanner<TxnArray<ycsb::YcsbExecPlan>>;
+template class GpuTableExecutionPlanner<TxnArray<micro::MicroTxnExecPlan>>;
 
 } // namespace epic
