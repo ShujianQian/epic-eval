@@ -1,15 +1,15 @@
 [submodule "third_party/spdlog"]
-	path = third_party/spdlog
-	url = git@github.com:gabime/spdlog.git
+        path = third_party/spdlog
+        url = https://github.com/gabime/spdlog.git
 [submodule "third_party/slabhash"]
-	path = third_party/slabhash
-	url = git@github.com:owensgroup/SlabHash.git
+        path = third_party/slabhash
+        url = https://github.com/owensgroup/SlabHash.git
 [submodule "third_party/cuco"]
-	path = third_party/cuco
-	url = git@github.com:NVIDIA/cuCollections.git
+        path = third_party/cuco
+        url = https://github.com/NVIDIA/cuCollections.git
 [submodule "third_party/masstree"]
-	path = third_party/masstree
-	url = git@github.com:uoft-felis/masstree.git
+        path = third_party/masstree
+        url = https://github.com/uoft-felis/masstree.git
 [submodule "third_party/gpubtree"]
-	path = third_party/gpubtree
-	url = git@github.com:ShujianQian/MVGpuBTree.git
+        path = third_party/gpubtree
+        url = https://github.com/ShujianQian/MVGpuBTree.git
