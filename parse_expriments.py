@@ -1,25 +1,24 @@
 import csv
 import os
 import re
+import sys
 
 benchmark = "tpcc"
 database = "epic"
 num_warehouses = 1
 skew_factor = 0.0
 fullread = "true"
-# cpu_exec_num_threads = 16
 cpu_exec_num_threads = 32
 num_epochs = 5
 num_txns = 100000
 split_fields = "true"
 commutative_ops = "false"
-# num_records = 2500000
 num_records = 10000000
 exec_device = "gpu"
 num_repeat = 5
 
-input_path = "./epic_latency_output_240421_1130"
-output_path = "./epic_latency_output_240421_1130"
+input_path = "./epic_output"
+output_path = "./epic_output"
 output_file_template = "output__b{}__d{}__w{}__a{}__r{}__c{}__e{}__s{}__f{}__m{}__n{}__x{}__r{}.txt"
 micro_output_file_template = "output__b{}__d{}__w{}__a{}__r{}__c{}__e{}__s{}__f{}__m{}__n{}__x{}__p{}__r{}.txt"
 
@@ -754,20 +753,23 @@ def gacco_ycsb_epoch_size_experiment():
 
 
 if __name__ == "__main__":
+    if len(sys.argv) == 3:
+        input_path = sys.argv[1]
+        output_path = sys.argv[2]
     # Check if the directory exists
     if not os.path.exists(output_path):
         # If not, create the directory
         os.makedirs(output_path)
-    # epic_ycsb_experiment()
-    # epic_tpcc_experiment()
-    # epic_tpcc_full_experiment()
-    # epic_cpu_tpcc_experiment()
-    # epic_cpu_tpcc_full_experiment()
-    # epic_cpu_ycsb_experiment()
-    # gacco_ycsb_experiment()
-    # gacco_tpcc_experiment()
+    epic_ycsb_experiment()
+    epic_tpcc_experiment()
+    epic_tpcc_full_experiment()
+    epic_cpu_tpcc_experiment()
+    epic_cpu_tpcc_full_experiment()
+    epic_cpu_ycsb_experiment()
+    gacco_ycsb_experiment()
+    gacco_tpcc_experiment()
     epic_ycsb_epoch_size_experiment()
     epic_tpcc_epoch_size_experiment()
-    # epic_microbenchmark()
+    epic_microbenchmark()
     gacco_tpcc_epoch_size_experiment()
     gacco_ycsb_epoch_size_experiment()

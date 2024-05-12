@@ -6,16 +6,14 @@ database = "epic"
 num_warehouses = 1
 skew_factor = 0.0
 fullread = "true"
-cpu_exec_num_threads = 16
-#cpu_exec_num_threads = 32
+cpu_exec_num_threads = 32
 num_epochs = 5
 num_txns = 100000
 split_fields = "true"
 commutative_ops = "false"
-num_records = 2500000
-#num_records = 10000000
+num_records = 10000000
 exec_device = "gpu"
-num_repeat = 10
+num_repeat = 5
 
 epic_driver_path = "./build/epic_driver"
 epic_micro_driver_path = "./build/micro_driver"
@@ -349,16 +347,16 @@ if __name__ == "__main__":
     if not os.path.exists(output_path):
         # If not, create the directory
         os.makedirs(output_path)
-    # epic_tpcc_full_experiment()
-    # epic_cpu_tpcc_full_experiment()
-    # epic_tpcc_experiment()
-    # epic_cpu_tpcc_experiment()
-    # epic_ycsb_experiment()
-    # epic_cpu_ycsb_experiment()
-    # gacco_ycsb_experiment()
-    # gacco_tpcc_experiment()
+    epic_tpcc_full_experiment()
+    epic_cpu_tpcc_full_experiment()
+    epic_tpcc_experiment()
+    epic_cpu_tpcc_experiment()
+    epic_ycsb_experiment()
+    epic_cpu_ycsb_experiment()
+    gacco_ycsb_experiment()
+    gacco_tpcc_experiment()
     epic_ycsb_epoch_size_experiment()
     epic_tpcc_epoch_size_experiment()
-    # epic_microbenchmark()
-    # gacco_ycsb_epoch_size_experiment()
-    # gacco_tpcc_epoch_size_experiment()
+    epic_microbenchmark()
+    gacco_ycsb_epoch_size_experiment()
+    gacco_tpcc_epoch_size_experiment()
