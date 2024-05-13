@@ -15,7 +15,7 @@ split_fields = "true"
 commutative_ops = "false"
 num_records = 10000000
 exec_device = "gpu"
-num_repeat = 5
+num_repeat = 3
 
 input_path = "./epic_output"
 output_path = "./epic_output"
