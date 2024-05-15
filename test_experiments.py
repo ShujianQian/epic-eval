@@ -25,6 +25,7 @@ err_file_template = "output__b{}__d{}__w{}__a{}__r{}__c{}__e{}__s{}__f{}__m{}__n
 
 micro_cmd_template = "{} -b {} -d {} -w {} -a {} -r {} -c {} -e {} -s {} -f {} -m {} -n {} -x {} -p {}"
 micro_output_file_template = "output__b{}__d{}__w{}__a{}__r{}__c{}__e{}__s{}__f{}__m{}__n{}__x{}__p{}__r{}.txt"
+micro_err_file_template = "output__b{}__d{}__w{}__a{}__r{}__c{}__e{}__s{}__f{}__m{}__n{}__x{}__p{}__r{}.err"
 
 
 def print_experiment_count():
@@ -368,7 +369,7 @@ def epic_microbenchmark():
                                                                 fullread, cpu_exec_num_threads, num_epochs, num_txns,
                                                                 split_fields, commutative_ops, num_records,
                                                                 exec_device, abort_rate, repeat)
-            err_filename = err_file_template.format(benchmark, database, num_warehouses, skew_factor,
+            err_filename = micro_err_file_template.format(benchmark, database, num_warehouses, skew_factor,
                                                                   fullread, cpu_exec_num_threads, num_epochs, num_txns,
                                                                   split_fields, commutative_ops, num_records,
                                                                   exec_device, repeat)
