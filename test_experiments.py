@@ -370,9 +370,9 @@ def epic_microbenchmark():
                                                                 split_fields, commutative_ops, num_records,
                                                                 exec_device, abort_rate, repeat)
             err_filename = micro_err_file_template.format(benchmark, database, num_warehouses, skew_factor,
-                                                                  fullread, cpu_exec_num_threads, num_epochs, num_txns,
-                                                                  split_fields, commutative_ops, num_records,
-                                                                  exec_device, repeat)
+                                                                fullread, cpu_exec_num_threads, num_epochs, num_txns,
+                                                                split_fields, commutative_ops, num_records,
+                                                                exec_device, abort_rate, repeat)
             output_filepath = os.path.join(output_path, output_filename)
             with open(output_filepath, "w") as output_file:
                 output_file.write(command_output.stdout)
