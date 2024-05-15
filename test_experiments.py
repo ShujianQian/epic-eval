@@ -21,6 +21,7 @@ epic_micro_driver_path = "./build/micro_driver"
 output_path = "./epic_output"
 cmd_template = "{} -b {} -d {} -w {} -a {} -r {} -c {} -e {} -s {} -f {} -m {} -n {} -x {}"
 output_file_template = "output__b{}__d{}__w{}__a{}__r{}__c{}__e{}__s{}__f{}__m{}__n{}__x{}__r{}.txt"
+err_file_template = "output__b{}__d{}__w{}__a{}__r{}__c{}__e{}__s{}__f{}__m{}__n{}__x{}__r{}.err"
 
 micro_cmd_template = "{} -b {} -d {} -w {} -a {} -r {} -c {} -e {} -s {} -f {} -m {} -n {} -x {} -p {}"
 micro_output_file_template = "output__b{}__d{}__w{}__a{}__r{}__c{}__e{}__s{}__f{}__m{}__n{}__x{}__p{}__r{}.txt"
@@ -53,9 +54,16 @@ def epic_ycsb_experiment():
                                                                   fullread, cpu_exec_num_threads, num_epochs, num_txns,
                                                                   split_fields, commutative_ops, num_records,
                                                                   exec_device, repeat)
+                    err_filename = err_file_template.format(benchmark, database, num_warehouses, skew_factor,
+                                                                  fullread, cpu_exec_num_threads, num_epochs, num_txns,
+                                                                  split_fields, commutative_ops, num_records,
+                                                                  exec_device, repeat)
                     output_filepath = os.path.join(output_path, output_filename)
                     with open(output_filepath, "w") as output_file:
                         output_file.write(command_output.stdout)
+                    err_filepath = os.path.join(output_path, err_filename)
+                    with open(err_filepath, "w") as err_file:
+                        err_file.write(command_output.stderr)
 
 
 def epic_tpcc_experiment():
@@ -71,13 +79,21 @@ def epic_tpcc_experiment():
             print(cmd)
             command_output = subprocess.run(cmd, capture_output=True, text=True, shell=True)
             print(command_output.stdout)
+            print(command_output.stderr, file=sys.stderr)
             output_filename = output_file_template.format(benchmark, database, num_warehouses, skew_factor,
                                                           fullread, cpu_exec_num_threads, num_epochs, num_txns,
                                                           split_fields, commutative_ops, num_records,
                                                           exec_device, repeat)
+            err_filename = err_file_template.format(benchmark, database, num_warehouses, skew_factor,
+                                                                  fullread, cpu_exec_num_threads, num_epochs, num_txns,
+                                                                  split_fields, commutative_ops, num_records,
+                                                                  exec_device, repeat)
             output_filepath = os.path.join(output_path, output_filename)
             with open(output_filepath, "w") as output_file:
                 output_file.write(command_output.stdout)
+            err_filepath = os.path.join(output_path, err_filename)
+            with open(err_filepath, "w") as err_file:
+                err_file.write(command_output.stderr)
 
 def epic_tpcc_full_experiment():
     database = "epic"
@@ -92,13 +108,21 @@ def epic_tpcc_full_experiment():
             print(cmd)
             command_output = subprocess.run(cmd, capture_output=True, text=True, shell=True)
             print(command_output.stdout)
+            print(command_output.stderr, file=sys.stderr)
             output_filename = output_file_template.format(benchmark, database, num_warehouses, skew_factor,
                                                           fullread, cpu_exec_num_threads, num_epochs, num_txns,
                                                           split_fields, commutative_ops, num_records,
                                                           exec_device, repeat)
+            err_filename = err_file_template.format(benchmark, database, num_warehouses, skew_factor,
+                                                                  fullread, cpu_exec_num_threads, num_epochs, num_txns,
+                                                                  split_fields, commutative_ops, num_records,
+                                                                  exec_device, repeat)
             output_filepath = os.path.join(output_path, output_filename)
             with open(output_filepath, "w") as output_file:
                 output_file.write(command_output.stdout)
+            err_filepath = os.path.join(output_path, err_filename)
+            with open(err_filepath, "w") as err_file:
+                err_file.write(command_output.stderr)
 
 
 def gacco_ycsb_experiment():
@@ -115,13 +139,21 @@ def gacco_ycsb_experiment():
                 print(cmd)
                 command_output = subprocess.run(cmd, capture_output=True, text=True, shell=True)
                 print(command_output.stdout)
+                print(command_output.stderr, file=sys.stderr)
                 output_filename = output_file_template.format(benchmark, database, num_warehouses, skew_factor,
                                                               fullread, cpu_exec_num_threads, num_epochs, num_txns,
                                                               split_fields, commutative_ops, num_records,
                                                               exec_device, repeat)
+                err_filename = err_file_template.format(benchmark, database, num_warehouses, skew_factor,
+                                                                  fullread, cpu_exec_num_threads, num_epochs, num_txns,
+                                                                  split_fields, commutative_ops, num_records,
+                                                                  exec_device, repeat)
                 output_filepath = os.path.join(output_path, output_filename)
                 with open(output_filepath, "w") as output_file:
                     output_file.write(command_output.stdout)
+                err_filepath = os.path.join(output_path, err_filename)
+                with open(err_filepath, "w") as err_file:
+                    err_file.write(command_output.stderr)
 
 
 def gacco_tpcc_experiment():
@@ -139,13 +171,21 @@ def gacco_tpcc_experiment():
                     print(cmd)
                     command_output = subprocess.run(cmd, capture_output=True, text=True, shell=True)
                     print(command_output.stdout)
+                    print(command_output.stderr, file=sys.stderr)
                     output_filename = output_file_template.format(benchmark, database, num_warehouses, skew_factor,
+                                                                  fullread, cpu_exec_num_threads, num_epochs, num_txns,
+                                                                  split_fields, commutative_ops, num_records,
+                                                                  exec_device, repeat)
+                    err_filename = err_file_template.format(benchmark, database, num_warehouses, skew_factor,
                                                                   fullread, cpu_exec_num_threads, num_epochs, num_txns,
                                                                   split_fields, commutative_ops, num_records,
                                                                   exec_device, repeat)
                     output_filepath = os.path.join(output_path, output_filename)
                     with open(output_filepath, "w") as output_file:
                         output_file.write(command_output.stdout)
+                    err_filepath = os.path.join(output_path, err_filename)
+                    with open(err_filepath, "w") as err_file:
+                        err_file.write(command_output.stderr)
 
 
 def epic_cpu_tpcc_experiment():
@@ -162,13 +202,21 @@ def epic_cpu_tpcc_experiment():
             print(cmd)
             command_output = subprocess.run(cmd, capture_output=True, text=True, shell=True)
             print(command_output.stdout)
+            print(command_output.stderr, file=sys.stderr)
             output_filename = output_file_template.format(benchmark, database, num_warehouses, skew_factor,
                                                           fullread, cpu_exec_num_threads, num_epochs, num_txns,
                                                           split_fields, commutative_ops, num_records,
                                                           exec_device, repeat)
+            err_filename = err_file_template.format(benchmark, database, num_warehouses, skew_factor,
+                                                                  fullread, cpu_exec_num_threads, num_epochs, num_txns,
+                                                                  split_fields, commutative_ops, num_records,
+                                                                  exec_device, repeat)
             output_filepath = os.path.join(output_path, output_filename)
             with open(output_filepath, "w") as output_file:
                 output_file.write(command_output.stdout)
+            err_filepath = os.path.join(output_path, err_filename)
+            with open(err_filepath, "w") as err_file:
+                err_file.write(command_output.stderr)
 
 
 def epic_cpu_tpcc_full_experiment():
@@ -185,13 +233,21 @@ def epic_cpu_tpcc_full_experiment():
             print(cmd)
             command_output = subprocess.run(cmd, capture_output=True, text=True, shell=True)
             print(command_output.stdout)
+            print(command_output.stderr, file=sys.stderr)
             output_filename = output_file_template.format(benchmark, database, num_warehouses, skew_factor,
                                                           fullread, cpu_exec_num_threads, num_epochs, num_txns,
                                                           split_fields, commutative_ops, num_records,
                                                           exec_device, repeat)
+            err_filename = err_file_template.format(benchmark, database, num_warehouses, skew_factor,
+                                                                  fullread, cpu_exec_num_threads, num_epochs, num_txns,
+                                                                  split_fields, commutative_ops, num_records,
+                                                                  exec_device, repeat)
             output_filepath = os.path.join(output_path, output_filename)
             with open(output_filepath, "w") as output_file:
                 output_file.write(command_output.stdout)
+            err_filepath = os.path.join(output_path, err_filename)
+            with open(err_filepath, "w") as err_file:
+                err_file.write(command_output.stderr)
 
 
 def epic_cpu_ycsb_experiment():
@@ -209,13 +265,21 @@ def epic_cpu_ycsb_experiment():
                 print(cmd)
                 command_output = subprocess.run(cmd, capture_output=True, text=True, shell=True)
                 print(command_output.stdout)
+                print(command_output.stderr, file=sys.stderr)
                 output_filename = output_file_template.format(benchmark, database, num_warehouses, skew_factor,
                                                               fullread, cpu_exec_num_threads, num_epochs, num_txns,
                                                               split_fields, commutative_ops, num_records,
                                                               exec_device, repeat)
+                err_filename = err_file_template.format(benchmark, database, num_warehouses, skew_factor,
+                                                                  fullread, cpu_exec_num_threads, num_epochs, num_txns,
+                                                                  split_fields, commutative_ops, num_records,
+                                                                  exec_device, repeat)
                 output_filepath = os.path.join(output_path, output_filename)
                 with open(output_filepath, "w") as output_file:
                     output_file.write(command_output.stdout)
+                err_filepath = os.path.join(output_path, err_filename)
+                with open(err_filepath, "w") as err_file:
+                    err_file.write(command_output.stderr)
 
 
 def epic_ycsb_epoch_size_experiment():
@@ -237,13 +301,21 @@ def epic_ycsb_epoch_size_experiment():
                 print(cmd)
                 command_output = subprocess.run(cmd, capture_output=True, text=True, shell=True)
                 print(command_output.stdout)
+                print(command_output.stderr, file=sys.stderr)
                 output_filename = output_file_template.format(benchmark, database, num_warehouses, skew_factor,
                                                               fullread, cpu_exec_num_threads, num_epochs, num_txns,
                                                               split_fields, commutative_ops, num_records,
                                                               exec_device, repeat)
+                err_filename = err_file_template.format(benchmark, database, num_warehouses, skew_factor,
+                                                                  fullread, cpu_exec_num_threads, num_epochs, num_txns,
+                                                                  split_fields, commutative_ops, num_records,
+                                                                  exec_device, repeat)
                 output_filepath = os.path.join(output_path, output_filename)
                 with open(output_filepath, "w") as output_file:
                     output_file.write(command_output.stdout)
+                err_filepath = os.path.join(output_path, err_filename)
+                with open(err_filepath, "w") as err_file:
+                    err_file.write(command_output.stderr)
 
 def epic_tpcc_epoch_size_experiment():
     database = "epic"
@@ -263,13 +335,21 @@ def epic_tpcc_epoch_size_experiment():
                 print(cmd)
                 command_output = subprocess.run(cmd, capture_output=True, text=True, shell=True)
                 print(command_output.stdout)
+                print(command_output.stderr, file=sys.stderr)
                 output_filename = output_file_template.format(benchmark, database, num_warehouses, skew_factor,
                                                               fullread, cpu_exec_num_threads, num_epochs, num_txns,
                                                               split_fields, commutative_ops, num_records,
                                                               exec_device, repeat)
+                err_filename = err_file_template.format(benchmark, database, num_warehouses, skew_factor,
+                                                                  fullread, cpu_exec_num_threads, num_epochs, num_txns,
+                                                                  split_fields, commutative_ops, num_records,
+                                                                  exec_device, repeat)
                 output_filepath = os.path.join(output_path, output_filename)
                 with open(output_filepath, "w") as output_file:
                     output_file.write(command_output.stdout)
+                err_filepath = os.path.join(output_path, err_filename)
+                with open(err_filepath, "w") as err_file:
+                    err_file.write(command_output.stderr)
 
 def epic_microbenchmark():
     database = "epic"
@@ -283,13 +363,22 @@ def epic_microbenchmark():
             print(cmd)
             command_output = subprocess.run(cmd, capture_output=True, text=True, shell=True)
             print(command_output.stdout)
+            print(command_output.stderr, file=sys.stderr)
             output_filename = micro_output_file_template.format(benchmark, database, num_warehouses, skew_factor,
                                                                 fullread, cpu_exec_num_threads, num_epochs, num_txns,
                                                                 split_fields, commutative_ops, num_records,
                                                                 exec_device, abort_rate, repeat)
+            err_filename = err_file_template.format(benchmark, database, num_warehouses, skew_factor,
+                                                                  fullread, cpu_exec_num_threads, num_epochs, num_txns,
+                                                                  split_fields, commutative_ops, num_records,
+                                                                  exec_device, repeat)
             output_filepath = os.path.join(output_path, output_filename)
             with open(output_filepath, "w") as output_file:
                 output_file.write(command_output.stdout)
+            err_filepath = os.path.join(output_path, err_filename)
+            with open(err_filepath, "w") as err_file:
+                err_file.write(command_output.stderr)
+
 def gacco_tpcc_epoch_size_experiment():
     database = "gacco"
 
@@ -308,13 +397,21 @@ def gacco_tpcc_epoch_size_experiment():
                     print(cmd)
                     command_output = subprocess.run(cmd, capture_output=True, text=True, shell=True)
                     print(command_output.stdout)
+                    print(command_output.stderr, file=sys.stderr)
                     output_filename = output_file_template.format(benchmark, database, num_warehouses, skew_factor,
+                                                                  fullread, cpu_exec_num_threads, num_epochs, num_txns,
+                                                                  split_fields, commutative_ops, num_records,
+                                                                  exec_device, repeat)
+                    err_filename = err_file_template.format(benchmark, database, num_warehouses, skew_factor,
                                                                   fullread, cpu_exec_num_threads, num_epochs, num_txns,
                                                                   split_fields, commutative_ops, num_records,
                                                                   exec_device, repeat)
                     output_filepath = os.path.join(output_path, output_filename)
                     with open(output_filepath, "w") as output_file:
                         output_file.write(command_output.stdout)
+                    err_filepath = os.path.join(output_path, err_filename)
+                    with open(err_filepath, "w") as err_file:
+                        err_file.write(command_output.stderr)
 
 def gacco_ycsb_epoch_size_experiment():
     database = "gacco"
@@ -335,13 +432,21 @@ def gacco_ycsb_epoch_size_experiment():
                 print(cmd)
                 command_output = subprocess.run(cmd, capture_output=True, text=True, shell=True)
                 print(command_output.stdout)
+                print(command_output.stderr, file=sys.stderr)
                 output_filename = output_file_template.format(benchmark, database, num_warehouses, skew_factor,
                                                               fullread, cpu_exec_num_threads, num_epochs, num_txns,
                                                               split_fields, commutative_ops, num_records,
                                                               exec_device, repeat)
+                err_filename = err_file_template.format(benchmark, database, num_warehouses, skew_factor,
+                                                                  fullread, cpu_exec_num_threads, num_epochs, num_txns,
+                                                                  split_fields, commutative_ops, num_records,
+                                                                  exec_device, repeat)
                 output_filepath = os.path.join(output_path, output_filename)
                 with open(output_filepath, "w") as output_file:
                     output_file.write(command_output.stdout)
+                err_filepath = os.path.join(output_path, err_filename)
+                with open(err_filepath, "w") as err_file:
+                    err_file.write(command_output.stderr)
 
 
 if __name__ == "__main__":
